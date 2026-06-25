@@ -32,6 +32,17 @@ from .complete_vehicle_route_record import (
     WaypointSpan,
     make_complete_vehicle_route_records,
 )
+from .generic_mission_pipeline import (
+    GENERIC_MISSION_MANIFEST_SCHEMA_VERSION,
+    GENERIC_MISSION_PIPELINE_ALGORITHM,
+    ComponentPlanningSpec,
+    GenericMissionDefinition,
+    GenericMissionPipelineConfig,
+    GenericMissionPipelineError,
+    GenericMissionPipelineResult,
+    PlanningBatchRunner,
+    run_generic_mission_pipeline,
+)
 from .mission_geometry_core import (
     GeometryCoreError,
     clip_partition_to_safe_area,
@@ -122,6 +133,15 @@ from .sequential_plan_coverage_client import (
 )
 
 __all__ = [
+    "GENERIC_MISSION_MANIFEST_SCHEMA_VERSION",
+    "GENERIC_MISSION_PIPELINE_ALGORITHM",
+    "ComponentPlanningSpec",
+    "GenericMissionDefinition",
+    "GenericMissionPipelineConfig",
+    "GenericMissionPipelineError",
+    "GenericMissionPipelineResult",
+    "PlanningBatchRunner",
+    "run_generic_mission_pipeline",
     "ARDUPILOT_MISSION_SCHEMA_VERSION",
     "END_ACTION_LAND_AT_REFERENCE",
     "END_ACTION_NONE",

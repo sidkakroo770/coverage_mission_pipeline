@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains fifteen layers:
+The repository currently contains sixteen layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -125,7 +125,18 @@ The repository currently contains fifteen layers:
     - rejects idle vehicles instead of silently omitting them;
     - writes JSON and `.waypoints` files atomically.
 
-The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, upload missions to vehicles, or execute an end-to-end production mission.
+16. **Generic end-to-end mission pipeline**
+    - accepts prepared components, explicit vehicle references, explicit planning specs and authoritative free-space geometry;
+    - deterministically orders components and builds validated planner requests;
+    - executes an injected sequential planner without coupling orchestration to a ROS graph;
+    - verifies exact request/result identity and ordering before accepting planner output;
+    - creates component route records, complete vehicle routes and complete route records;
+    - builds one ArduPilot mission for every active vehicle while preserving idle vehicles explicitly;
+    - publishes component routes, complete routes, mission JSON, QGC WPL 110 files and a deterministic manifest;
+    - atomically publishes the output directory only after every artifact succeeds;
+    - remains independent of `mission_output.json` and any mission-specific input adapter.
+
+The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, upload missions to vehicles, or execute SITL verification.
 
 ## Unit tests
 
