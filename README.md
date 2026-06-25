@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains nine layers:
+The repository currently contains ten layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -64,6 +64,14 @@ The repository currently contains nine layers:
    - supports an explicit minimum distance from hull and hole boundaries;
    - can enforce a minimum selected start/goal separation;
    - does not infer vehicle homes, component order or route connectors.
+
+10. **Georeferenced route-record contract**
+    - attaches the complete local Cartesian frame to each successful route;
+    - serializes one authoritative local-coordinate waypoint sequence;
+    - derives projected coordinates by restoring the recorded origin;
+    - converts projected coordinates to and from WGS84 longitude/latitude;
+    - preserves waypoint order and altitude without silently dropping results;
+    - writes deterministic strict JSON atomically.
 
 The package does not yet parse `mission_output.json`, determine vehicle homes or
 component visit order, join disconnected route groups or generate flight missions.
