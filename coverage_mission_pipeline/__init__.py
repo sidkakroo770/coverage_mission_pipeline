@@ -25,6 +25,13 @@ from .prepared_component import (
     PreparedComponentError,
     make_prepared_components,
 )
+from .start_goal_policy import (
+    StartGoalPolicyConfig,
+    StartGoalPolicyError,
+    StartGoalSelection,
+    planning_request_from_anchors,
+    select_start_goal,
+)
 from .sequential_plan_coverage_client import (
     PlanCoverageClientError,
     PlannerRequestTimeoutError,
@@ -56,10 +63,15 @@ __all__ = [
     "SequentialClientConfig",
     "SequentialPlanCoverageRunner",
     "SequentialPlanningError",
+    "StartGoalPolicyConfig",
+    "StartGoalPolicyError",
+    "StartGoalSelection",
     "clip_partition_to_safe_area",
     "create_safe_area",
     "extract_polygon_components",
     "make_prepared_components",
     "plan_coverage_response_to_result",
+    "planning_request_from_anchors",
     "prepare_partition_components",
+    "select_start_goal",
 ]

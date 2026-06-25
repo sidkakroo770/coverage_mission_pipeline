@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains eight layers:
+The repository currently contains nine layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -57,8 +57,16 @@ The repository currently contains eight layers:
    - does not depend on `mission_output.json`;
    - prints the returned waypoint count or exits nonzero on failure.
 
-The package does not yet parse `mission_output.json`, choose production
-start/goal poses, join disconnected route groups or generate flight missions.
+9. **Explicit-anchor start/goal policy**
+   - accepts start and goal reference anchors in the component local frame;
+   - keeps already-feasible anchors unchanged;
+   - projects external or hole-contained anchors to the nearest feasible point;
+   - supports an explicit minimum distance from hull and hole boundaries;
+   - can enforce a minimum selected start/goal separation;
+   - does not infer vehicle homes, component order or route connectors.
+
+The package does not yet parse `mission_output.json`, determine vehicle homes or
+component visit order, join disconnected route groups or generate flight missions.
 
 ## Unit tests
 
