@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains eleven layers:
+The repository currently contains twelve layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -83,8 +83,17 @@ The repository currently contains eleven layers:
     - returns an idle plan for referenced vehicles with no assigned components;
     - records proxy transition points but does not construct flight connectors.
 
-The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, build visibility-checked
-connectors between ordered route groups or generate flight missions.
+12. **Flight-safe route connectors**
+    - uses a direct segment when the entire segment lies in one free-space component;
+    - otherwise builds a polygon-vertex visibility graph and runs deterministic A*;
+    - naturally chooses the shorter clockwise or anticlockwise side for one exclusion;
+    - handles multiple exclusions and concave mission boundaries without a grid resolution;
+    - treats the supplied safe area as authoritative and never applies clearance twice;
+    - fails closed when endpoints are disconnected or graph complexity exceeds its limit;
+    - joins ordered route records at one common altitude without duplicate endpoints;
+    - validates every route waypoint and segment before assembly.
+
+The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, connect vehicle homes to the first route, optimize route direction, or generate flight missions.
 
 ## Unit tests
 
