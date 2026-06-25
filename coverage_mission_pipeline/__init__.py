@@ -1,5 +1,23 @@
 """Mission geometry preparation and orchestration package."""
 
+from .ardupilot_mission import (
+    ARDUPILOT_MISSION_SCHEMA_VERSION,
+    END_ACTION_LAND_AT_REFERENCE,
+    END_ACTION_NONE,
+    END_ACTION_RTL,
+    MAV_CMD_NAV_LAND,
+    MAV_CMD_NAV_RETURN_TO_LAUNCH,
+    MAV_CMD_NAV_TAKEOFF,
+    MAV_CMD_NAV_WAYPOINT,
+    MAV_FRAME_GLOBAL_RELATIVE_ALT,
+    QGC_WPL_110_HEADER,
+    ArduPilotMission,
+    ArduPilotMissionBuildConfig,
+    ArduPilotMissionError,
+    ArduPilotMissionItem,
+    build_ardupilot_mission,
+    build_ardupilot_missions,
+)
 from .complete_vehicle_route_record import (
     COMPLETE_VEHICLE_ROUTE_SCHEMA_VERSION,
     CONNECTOR_SEGMENT_KIND,
@@ -104,6 +122,22 @@ from .sequential_plan_coverage_client import (
 )
 
 __all__ = [
+    "ARDUPILOT_MISSION_SCHEMA_VERSION",
+    "END_ACTION_LAND_AT_REFERENCE",
+    "END_ACTION_NONE",
+    "END_ACTION_RTL",
+    "MAV_CMD_NAV_LAND",
+    "MAV_CMD_NAV_RETURN_TO_LAUNCH",
+    "MAV_CMD_NAV_TAKEOFF",
+    "MAV_CMD_NAV_WAYPOINT",
+    "MAV_FRAME_GLOBAL_RELATIVE_ALT",
+    "QGC_WPL_110_HEADER",
+    "ArduPilotMission",
+    "ArduPilotMissionBuildConfig",
+    "ArduPilotMissionError",
+    "ArduPilotMissionItem",
+    "build_ardupilot_mission",
+    "build_ardupilot_missions",
     "COMPLETE_VEHICLE_ROUTE_SCHEMA_VERSION",
     "CONNECTOR_SEGMENT_KIND",
     "COVERAGE_ROUTE_SEGMENT_KIND",

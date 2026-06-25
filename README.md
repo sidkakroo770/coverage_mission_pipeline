@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains fourteen layers:
+The repository currently contains fifteen layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -114,7 +114,18 @@ The repository currently contains fourteen layers:
     - supports idle vehicles and atomic file writing;
     - avoids duplicated coordinate arrays that could drift out of sync.
 
-The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, or generate ArduPilot flight missions.
+15. **ArduPilot mission model and exporter**
+    - converts a complete vehicle-route record to WGS84 Copter mission items;
+    - interprets stored route altitude explicitly as home-relative altitude;
+    - uses `MAV_FRAME_GLOBAL_RELATIVE_ALT` for every exported item;
+    - supports TAKEOFF, WAYPOINT, RTL and reference-only LAND termination;
+    - validates consecutive sequence numbers, current flags and command parameters;
+    - serializes deterministic strict mission JSON;
+    - exports and parses the twelve-field `QGC WPL 110` waypoint format;
+    - rejects idle vehicles instead of silently omitting them;
+    - writes JSON and `.waypoints` files atomically.
+
+The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, upload missions to vehicles, or execute an end-to-end production mission.
 
 ## Unit tests
 
