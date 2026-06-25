@@ -68,6 +68,16 @@ from .vehicle_component_ordering import (
     order_components_by_vehicle,
     order_components_for_vehicle,
 )
+from .vehicle_route_assembly import (
+    FORWARD_ROUTE_DIRECTION,
+    REVERSED_ROUTE_DIRECTION,
+    ROUTE_DIRECTION_OPTIMIZATION_ALGORITHM,
+    CompleteVehicleRoute,
+    OrientedRoute,
+    VehicleRouteAssemblyConfig,
+    VehicleRouteAssemblyError,
+    assemble_vehicle_route,
+)
 from .sequential_plan_coverage_client import (
     PlanCoverageClientError,
     PlannerRequestTimeoutError,
@@ -121,6 +131,14 @@ __all__ = [
     "VehicleComponentPlan",
     "VehicleOrderingError",
     "VehicleReference",
+    "assemble_vehicle_route",
+    "VehicleRouteAssemblyError",
+    "VehicleRouteAssemblyConfig",
+    "ROUTE_DIRECTION_OPTIMIZATION_ALGORITHM",
+    "REVERSED_ROUTE_DIRECTION",
+    "OrientedRoute",
+    "FORWARD_ROUTE_DIRECTION",
+    "CompleteVehicleRoute",
     "clip_partition_to_safe_area",
     "connect_ordered_route_records",
     "create_safe_area",
