@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains two ROS-independent layers:
+The repository currently contains three layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -21,8 +21,15 @@ The repository currently contains two ROS-independent layers:
    - serializes to deterministic, strict JSON;
    - rejects MultiPolygons, unknown fields and unsafe identifiers.
 
-The package does not yet parse `mission_output.json`, call ROS services, select
-start/goal poses or plan routes.
+3. **ROS polygon conversion**
+   - converts one prepared component to `PolygonWithHolesStamped`;
+   - preserves hull and hole orientation;
+   - uses the component's actual frame ID;
+   - validates altitude, timestamp and Point32 representability;
+   - has no ROS node and makes no service call.
+
+The package does not yet parse `mission_output.json`, select start/goal poses,
+call `/plan_coverage`, join route groups or generate flight missions.
 
 ## Test
 
