@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains three layers:
+The repository currently contains five layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -28,7 +28,20 @@ The repository currently contains three layers:
    - validates altitude, timestamp and Point32 representability;
    - has no ROS node and makes no service call.
 
-The package does not yet parse `mission_output.json`, select start/goal poses,
+4. **Coverage-planning request model**
+   - requires explicit start and goal points;
+   - validates that both lie in connected free space, not inside holes;
+   - validates altitude, positive footprint and overlap in `[0, 1)`;
+   - permits boundary points and identical start/goal points;
+   - deliberately does not choose a start/goal policy.
+
+5. **PlanCoverage request conversion**
+   - creates a complete generated `PlanCoverage.Request` message;
+   - gives polygon, start and goal the same frame, stamp and altitude;
+   - sets valid identity quaternions;
+   - performs no service discovery or service call.
+
+The package does not yet parse `mission_output.json`, choose start/goal poses,
 call `/plan_coverage`, join route groups or generate flight missions.
 
 ## Test

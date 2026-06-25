@@ -7,6 +7,11 @@ from .mission_geometry_core import (
     extract_polygon_components,
     prepare_partition_components,
 )
+from .planning_request import (
+    CoveragePlanningRequest,
+    LocalPoint2D,
+    PlanningRequestError,
+)
 from .prepared_component import (
     LocalCartesianFrame,
     PreparedComponent,
@@ -15,8 +20,11 @@ from .prepared_component import (
 )
 
 __all__ = [
+    "CoveragePlanningRequest",
     "GeometryCoreError",
     "LocalCartesianFrame",
+    "LocalPoint2D",
+    "PlanningRequestError",
     "PreparedComponent",
     "PreparedComponentError",
     "clip_partition_to_safe_area",
