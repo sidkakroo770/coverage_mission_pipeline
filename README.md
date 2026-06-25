@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains five layers:
+The repository currently contains eight layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -38,14 +38,44 @@ The repository currently contains five layers:
 5. **PlanCoverage request conversion**
    - creates a complete generated `PlanCoverage.Request` message;
    - gives polygon, start and goal the same frame, stamp and altitude;
-   - sets valid identity quaternions;
-   - performs no service discovery or service call.
+   - sets valid identity quaternions.
 
-The package does not yet parse `mission_output.json`, choose start/goal poses,
-call `/plan_coverage`, join route groups or generate flight missions.
+6. **PlanCoverage response validation**
+   - rejects explicit planner failures and malformed success responses;
+   - validates frame consistency, finite waypoints and constant altitude;
+   - detaches ROS messages into immutable route-result objects.
 
-## Test
+7. **Sequential fail-closed client**
+   - waits for `/plan_coverage` with a finite deadline;
+   - sends exactly one request at a time in deterministic input order;
+   - aborts the entire batch after the first timeout, rejection or bad response;
+   - never sends a later request after an uncertain timed-out call;
+   - retains completed results only for failure diagnostics.
+
+8. **Live synthetic smoke client**
+   - sends one explicit 20 m by 10 m rectangle to the real service;
+   - does not depend on `mission_output.json`;
+   - prints the returned waypoint count or exits nonzero on failure.
+
+The package does not yet parse `mission_output.json`, choose production
+start/goal poses, join disconnected route groups or generate flight missions.
+
+## Unit tests
 
 ```bash
 python3 -m pytest -v test
+```
+
+## Live service smoke test
+
+Start the planner in one sourced terminal:
+
+```bash
+ros2 run polygon_coverage_ros2 coverage_planner
+```
+
+Then, in a second sourced terminal:
+
+```bash
+ros2 run coverage_mission_pipeline plan_coverage_smoke_client
 ```

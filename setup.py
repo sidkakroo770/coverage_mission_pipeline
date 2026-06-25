@@ -22,5 +22,11 @@ setup(
         "polygon coverage planning."
     ),
     license="TODO",
+    entry_points={
+        "console_scripts": [
+            "plan_coverage_smoke_client = "
+            "coverage_mission_pipeline.plan_coverage_smoke_client:main",
+        ],
+    },
     tests_require=["pytest"],
 )
