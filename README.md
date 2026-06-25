@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains thirteen layers:
+The repository currently contains fourteen layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -104,7 +104,17 @@ The repository currently contains thirteen layers:
     - assembles one continuous cruise-altitude waypoint sequence without duplicate joins;
     - supports idle vehicles without fabricating waypoints or connectors.
 
-The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, serialize complete vehicle-route assemblies, or generate ArduPilot flight missions.
+14. **Complete vehicle-route record**
+    - serializes the optimized per-vehicle route to deterministic strict JSON;
+    - stores one authoritative local-coordinate waypoint array;
+    - represents routes and connectors as inclusive spans into that array;
+    - preserves component order, route direction and connector algorithms;
+    - validates span continuity, endpoint chains, path lengths and cruise altitude;
+    - derives projected and WGS84 waypoints on demand from the stored frame;
+    - supports idle vehicles and atomic file writing;
+    - avoids duplicated coordinate arrays that could drift out of sync.
+
+The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, or generate ArduPilot flight missions.
 
 ## Unit tests
 

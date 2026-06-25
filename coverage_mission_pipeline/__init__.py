@@ -1,5 +1,19 @@
 """Mission geometry preparation and orchestration package."""
 
+from .complete_vehicle_route_record import (
+    COMPLETE_VEHICLE_ROUTE_SCHEMA_VERSION,
+    CONNECTOR_SEGMENT_KIND,
+    COVERAGE_ROUTE_SEGMENT_KIND,
+    INTER_ROUTE_CONNECTOR_ROLE,
+    REFERENCE_CONNECTOR_ROLE,
+    RETURN_CONNECTOR_ROLE,
+    CompleteVehicleRouteRecord,
+    CompleteVehicleRouteRecordError,
+    ConnectorSpanRecord,
+    CoverageRouteSpanRecord,
+    WaypointSpan,
+    make_complete_vehicle_route_records,
+)
 from .mission_geometry_core import (
     GeometryCoreError,
     clip_partition_to_safe_area,
@@ -90,6 +104,17 @@ from .sequential_plan_coverage_client import (
 )
 
 __all__ = [
+    "COMPLETE_VEHICLE_ROUTE_SCHEMA_VERSION",
+    "CONNECTOR_SEGMENT_KIND",
+    "COVERAGE_ROUTE_SEGMENT_KIND",
+    "INTER_ROUTE_CONNECTOR_ROLE",
+    "REFERENCE_CONNECTOR_ROLE",
+    "RETURN_CONNECTOR_ROLE",
+    "CompleteVehicleRouteRecord",
+    "CompleteVehicleRouteRecordError",
+    "ConnectorSpanRecord",
+    "CoverageRouteSpanRecord",
+    "WaypointSpan",
     "CoveragePlanningRequest",
     "CoveragePlanningResult",
     "CoverageRouteRecord",
@@ -147,6 +172,7 @@ __all__ = [
     "geographic_to_projected",
     "local_to_geographic",
     "local_to_projected",
+    "make_complete_vehicle_route_records",
     "make_prepared_components",
     "make_route_records",
     "order_components_by_vehicle",
