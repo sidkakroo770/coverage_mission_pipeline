@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains ten layers:
+The repository currently contains eleven layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -73,8 +73,18 @@ The repository currently contains ten layers:
     - preserves waypoint order and altitude without silently dropping results;
     - writes deterministic strict JSON atomically.
 
-The package does not yet parse `mission_output.json`, determine vehicle homes or
-component visit order, join disconnected route groups or generate flight missions.
+11. **Vehicle references and component visit ordering**
+    - stores explicit home, launch, current-position or custom references;
+    - accepts local, projected or WGS84 reference coordinates;
+    - validates exact local-frame compatibility with assigned components;
+    - rejects duplicate IDs, missing assignments and positive-area overlaps;
+    - greedily orders every component by straight-line distance lower bound;
+    - resolves equal-distance candidates by component ID, independent of input order;
+    - returns an idle plan for referenced vehicles with no assigned components;
+    - records proxy transition points but does not construct flight connectors.
+
+The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, build visibility-checked
+connectors between ordered route groups or generate flight missions.
 
 ## Unit tests
 
