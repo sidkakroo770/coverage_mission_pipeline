@@ -239,3 +239,12 @@ configuration before starting ROS, calls the planner one component at a time,
 and publishes the final directory only after every route and ArduPilot export
 succeeds. In addition to the generic mission manifest, the bundle contains
 `production-run.json` and `operational-config.normalized.json` for traceability.
+
+### Point32 waypoint normalization before route repair
+
+Planner-returned waypoints that differ from the authoritative free-space boundary
+by at most 1 cm are projected onto a tiny inward offset before any segment
+connectivity or visibility checks. This avoids ambiguous GEOS boundary predicates
+caused by ROS `geometry_msgs/Point32` rounding. The total correction remains
+bounded by 1 cm, and every resulting segment is still required to be covered by
+the original, unbuffered free-space geometry.

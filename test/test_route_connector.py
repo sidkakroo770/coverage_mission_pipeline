@@ -594,6 +594,9 @@ def test_point32_waypoint_discrepancy_is_snapped_to_exact_free_space(
     assert repaired.waypoints[0] == route.waypoints[0]
     assert repaired.waypoints[1].x_m == pytest.approx(20.0)
     assert repaired.waypoints[1].y_m == pytest.approx(1.0)
+    assert simple_free_space.contains(
+        Point(repaired.waypoints[1].x_m, repaired.waypoints[1].y_m)
+    )
     assert simple_free_space.covers(
         LineString(
             [
@@ -602,6 +605,31 @@ def test_point32_waypoint_discrepancy_is_snapped_to_exact_free_space(
             ]
         )
     )
+
+
+def test_point32_endpoint_is_normalised_before_unsafe_segment_repair(frame) -> None:
+    free_space = Polygon(
+        [(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)],
+        [[(8.0, 3.0), (12.0, 3.0), (12.0, 7.0), (8.0, 7.0)]],
+    )
+    route = make_route(
+        frame,
+        "r-point32-hole",
+        "c-point32-hole",
+        [(2.0, 5.0, 10.0), (20.000005, 5.0, 10.0)],
+    )
+
+    result = connect_ordered_route_records([route], free_space)
+    repaired = result.routes[0]
+
+    assert free_space.contains(
+        Point(repaired.waypoints[-1].x_m, repaired.waypoints[-1].y_m)
+    )
+    assert len(repaired.waypoints) > 2
+    for left, right in zip(repaired.waypoints, repaired.waypoints[1:]):
+        assert free_space.covers(
+            LineString([(left.x_m, left.y_m), (right.x_m, right.y_m)])
+        )
 
 
 def test_point32_waypoint_discrepancy_beyond_one_centimetre_is_rejected(

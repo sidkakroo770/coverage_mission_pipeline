@@ -43,6 +43,7 @@ _LENGTH_TOLERANCE_M = 1.0e-8
 _ALTITUDE_TOLERANCE_M = 1.0e-6
 _EQUAL_COST_TOLERANCE_M = 1.0e-10
 ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M = 0.01
+_POINT32_INWARD_NUDGE_M = 1.0e-5
 
 
 class ConnectorPlanningError(ValueError):
@@ -540,6 +541,17 @@ class ConnectedRouteSequence:
         }
 
 
+def _covering_part_indices(
+    point: Point,
+    free_space_parts: tuple[Polygon, ...],
+) -> tuple[int, ...]:
+    return tuple(
+        index
+        for index, part in enumerate(free_space_parts)
+        if part.covers(point)
+    )
+
+
 def _nearest_part_point(
     point: Point,
     free_space_parts: tuple[Polygon, ...],
@@ -549,6 +561,49 @@ def _nearest_part_point(
         snapped = nearest_points(part, point)[0]
         candidates.append((float(point.distance(snapped)), part_index, snapped))
     return min(candidates, key=lambda item: (item[0], item[1]))
+
+
+def _snap_point_inside_part(
+    point: Point,
+    part: Polygon,
+    *,
+    maximum_correction_m: float,
+) -> Point:
+    """Return a numerically stable point strictly inside ``part``.
+
+    ``nearest_points(part, point)`` can lie a few ulps outside the polygon even
+    though it represents a boundary projection.  Projecting onto a tiny inward
+    buffer avoids feeding that ambiguous boundary coordinate back into GEOS.
+    The total correction remains bounded by the public Point32 tolerance.
+    """
+    boundary_point = nearest_points(part, point)[0]
+    boundary_distance = float(point.distance(boundary_point))
+    remaining = maximum_correction_m - boundary_distance
+    if remaining < 0.0:
+        raise ConnectorPlanningError(
+            "Point32 correction exceeds the configured repair tolerance"
+        )
+
+    nudge = min(_POINT32_INWARD_NUDGE_M, remaining * 0.5)
+    if nudge > 0.0:
+        interior = part.buffer(-nudge)
+        if not interior.is_empty:
+            candidate = nearest_points(interior, point)[0]
+            correction = float(point.distance(candidate))
+            if correction <= maximum_correction_m and part.covers(candidate):
+                return candidate
+
+    if part.covers(boundary_point):
+        return boundary_point
+
+    representative = part.representative_point()
+    correction = float(point.distance(representative))
+    if correction <= maximum_correction_m and part.covers(representative):
+        return representative
+
+    raise ConnectorPlanningError(
+        "could not produce a stable Point32 correction inside free_space"
+    )
 
 
 def _normalise_route_inside_free_space(
@@ -580,12 +635,24 @@ def _normalise_route_inside_free_space(
             repaired_points.append(waypoint)
             continue
 
-        distance_m, _, snapped = _nearest_part_point(raw_point, free_space_parts)
+        distance_m, part_index, _ = _nearest_part_point(
+            raw_point, free_space_parts
+        )
         if distance_m > ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M:
             raise ConnectorPlanningError(
                 f"route {route.request_id!r} waypoint {index} is outside free_space "
                 f"by {distance_m:.9f} m, exceeding Point32 repair tolerance "
                 f"{ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M:.3f} m"
+            )
+        snapped = _snap_point_inside_part(
+            raw_point,
+            free_space_parts[part_index],
+            maximum_correction_m=ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M,
+        )
+        if not free_space_parts[part_index].covers(snapped):
+            raise ConnectorPlanningError(
+                f"route {route.request_id!r} waypoint {index} could not be "
+                "normalised inside free_space"
             )
         repaired_points.append(
             CoverageWaypoint(float(snapped.x), float(snapped.y), waypoint.z_m)
@@ -597,6 +664,10 @@ def _normalise_route_inside_free_space(
         previous = assembled[-1]
         left = (previous.x_m, previous.y_m)
         right = (following.x_m, following.y_m)
+        if left == right:
+            assembled.append(following)
+            continue
+
         segment = _segment(left, right)
         if any(part.covers(segment) for part in free_space_parts):
             assembled.append(following)
@@ -604,17 +675,15 @@ def _normalise_route_inside_free_space(
 
         left_point = Point(left)
         right_point = Point(right)
-        common_parts = [
-            part
-            for part in free_space_parts
-            if part.covers(left_point) and part.covers(right_point)
-        ]
-        if not common_parts:
+        left_parts = set(_covering_part_indices(left_point, free_space_parts))
+        right_parts = set(_covering_part_indices(right_point, free_space_parts))
+        common_part_indices = sorted(left_parts.intersection(right_parts))
+        if not common_part_indices:
             raise ConnectorPlanningError(
                 f"route {route.request_id!r} segment {index} has endpoints in "
                 "different connected free-space components"
             )
-        repair_part = common_parts[0]
+        repair_part = free_space_parts[common_part_indices[0]]
 
         repair = plan_connector(
             repair_part,
