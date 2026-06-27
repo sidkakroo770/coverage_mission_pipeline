@@ -89,9 +89,12 @@ The repository currently contains eighteen layers:
     - naturally chooses the shorter clockwise or anticlockwise side for one exclusion;
     - handles multiple exclusions and concave mission boundaries without a grid resolution;
     - treats the supplied safe area as authoritative and never applies clearance twice;
-    - fails closed when endpoints are disconnected or graph complexity exceeds its limit;
+    - normalizes only sub-centimetre ROS Point32 boundary discrepancies back onto
+      the exact authoritative geometry, rebuilding affected segments inside free space;
+    - fails closed when deviations exceed the 1 cm interface tolerance, endpoints are
+      disconnected, or graph complexity exceeds its limit;
     - joins ordered route records at one common altitude without duplicate endpoints;
-    - validates every route waypoint and segment before assembly.
+    - validates every normalized route waypoint and segment before assembly.
 
 13. **Complete per-vehicle route assembly**
     - preserves the component order selected by the vehicle-ordering layer;

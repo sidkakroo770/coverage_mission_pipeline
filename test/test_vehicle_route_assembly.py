@@ -681,3 +681,18 @@ def test_complete_vehicle_route_rejects_tampered_waypoints(frame, open_space) ->
             valid.waypoints[:-1],
             valid.return_to_reference,
         )
+
+
+def test_assembly_uses_point32_normalised_route_endpoints(frame, open_space) -> None:
+    comp = component(frame, "component-point32", (110.0, -1.0, 120.0, 1.0))
+    reference = VehicleReference("drone-1", frame, LocalPoint2D(0.0, 0.0), "home")
+    plan = manual_plan(reference, [comp])
+    source = route(comp, [(110.0, 0.0), (120.0005, 0.0)])
+
+    result = assemble_vehicle_route(plan, [source], open_space)
+
+    selected = result.oriented_routes[0].source_route
+    assert selected.waypoints[-1].x_m == pytest.approx(120.0)
+    assert open_space.covers(
+        Point(selected.waypoints[-1].x_m, selected.waypoints[-1].y_m)
+    )

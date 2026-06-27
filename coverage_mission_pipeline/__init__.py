@@ -70,6 +70,7 @@ from .prepared_component import (
 )
 from .route_connector import (
     DIRECT_CONNECTOR_ALGORITHM,
+    ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M,
     TRIVIAL_CONNECTOR_ALGORITHM,
     VISIBILITY_ASTAR_ALGORITHM,
     ConnectedRouteSequence,

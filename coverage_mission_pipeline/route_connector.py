@@ -27,7 +27,7 @@ from shapely.geometry import (
     Polygon,
 )
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import unary_union
+from shapely.ops import nearest_points, unary_union
 from shapely.validation import explain_validity
 
 from .planning_request import LocalPoint2D
@@ -42,6 +42,7 @@ TRIVIAL_CONNECTOR_ALGORITHM = "trivial_same_point_v1"
 _LENGTH_TOLERANCE_M = 1.0e-8
 _ALTITUDE_TOLERANCE_M = 1.0e-6
 _EQUAL_COST_TOLERANCE_M = 1.0e-10
+ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M = 0.01
 
 
 class ConnectorPlanningError(ValueError):
@@ -539,23 +540,135 @@ class ConnectedRouteSequence:
         }
 
 
-def _validate_route_inside_free_space(
+def _nearest_part_point(
+    point: Point,
+    free_space_parts: tuple[Polygon, ...],
+) -> tuple[float, int, Point]:
+    candidates: list[tuple[float, int, Point]] = []
+    for part_index, part in enumerate(free_space_parts):
+        snapped = nearest_points(part, point)[0]
+        candidates.append((float(point.distance(snapped)), part_index, snapped))
+    return min(candidates, key=lambda item: (item[0], item[1]))
+
+
+def _normalise_route_inside_free_space(
     route: CoverageRouteRecord,
     free_space_parts: tuple[Polygon, ...],
-) -> None:
-    coordinates = [(point.x_m, point.y_m) for point in route.waypoints]
-    for index, coordinate in enumerate(coordinates):
-        point = Point(coordinate)
-        if not any(part.covers(point) for part in free_space_parts):
+    connector_config: ConnectorPlannerConfig,
+) -> CoverageRouteRecord:
+    """Repair only tiny ROS Point32 boundary discrepancies.
+
+    Planner request polygon vertices are transmitted through ``geometry_msgs/Point32``
+    while the authoritative local geometry remains double precision. A planner route
+    that terminates on the boundary it received can therefore differ from the source
+    boundary by a sub-millimetre amount. Waypoints are snapped to the authoritative
+    geometry only when the correction is at most the fixed 1 cm interface tolerance.
+    Any affected segment is then rebuilt through the exact connector planner, so the
+    returned route remains fully covered by the unbuffered authoritative free space.
+    """
+    repaired_points: list[CoverageWaypoint] = []
+    changed = False
+
+    for index, waypoint in enumerate(route.waypoints):
+        raw_point = Point(waypoint.x_m, waypoint.y_m)
+        if any(part.covers(raw_point) for part in free_space_parts):
+            repaired_points.append(waypoint)
+            continue
+
+        distance_m, _, snapped = _nearest_part_point(raw_point, free_space_parts)
+        if distance_m > ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M:
             raise ConnectorPlanningError(
-                f"route {route.request_id!r} waypoint {index} is outside free_space"
+                f"route {route.request_id!r} waypoint {index} is outside free_space "
+                f"by {distance_m:.9f} m, exceeding Point32 repair tolerance "
+                f"{ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M:.3f} m"
             )
-    for index, (left, right) in enumerate(zip(coordinates, coordinates[1:])):
+        repaired_points.append(
+            CoverageWaypoint(float(snapped.x), float(snapped.y), waypoint.z_m)
+        )
+        changed = True
+
+    assembled: list[CoverageWaypoint] = [repaired_points[0]]
+    for index, following in enumerate(repaired_points[1:]):
+        previous = assembled[-1]
+        left = (previous.x_m, previous.y_m)
+        right = (following.x_m, following.y_m)
         segment = _segment(left, right)
-        if not any(part.covers(segment) for part in free_space_parts):
+        if any(part.covers(segment) for part in free_space_parts):
+            assembled.append(following)
+            continue
+
+        left_point = Point(left)
+        right_point = Point(right)
+        common_parts = [
+            part
+            for part in free_space_parts
+            if part.covers(left_point) and part.covers(right_point)
+        ]
+        repair_part = next(
+            (
+                part
+                for part in common_parts
+                if part.buffer(
+                    ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M,
+                    join_style=2,
+                ).covers(segment)
+            ),
+            None,
+        )
+        if repair_part is None:
             raise ConnectorPlanningError(
-                f"route {route.request_id!r} segment {index} leaves free_space"
+                f"route {route.request_id!r} segment {index} leaves free_space "
+                "by more than the Point32 repair tolerance"
             )
+
+        repair = plan_connector(
+            repair_part,
+            LocalPoint2D(previous.x_m, previous.y_m),
+            LocalPoint2D(following.x_m, following.y_m),
+            config=connector_config,
+        )
+        repair_tail = repair.waypoints[1:]
+        for repair_index, point in enumerate(repair_tail):
+            altitude_m = (
+                following.z_m
+                if repair_index == len(repair_tail) - 1
+                else previous.z_m
+            )
+            assembled.append(CoverageWaypoint(point.x_m, point.y_m, altitude_m))
+        changed = True
+
+    repaired = tuple(assembled)
+    for index, coordinate in enumerate(
+        (point.x_m, point.y_m) for point in repaired
+    ):
+        if not any(part.covers(Point(coordinate)) for part in free_space_parts):
+            raise ConnectorPlanningError(
+                f"route {route.request_id!r} waypoint {index} remained outside "
+                "free_space after Point32 repair"
+            )
+    for index, (left, right) in enumerate(
+        zip(
+            ((point.x_m, point.y_m) for point in repaired),
+            ((point.x_m, point.y_m) for point in repaired[1:]),
+        )
+    ):
+        if not any(part.covers(_segment(left, right)) for part in free_space_parts):
+            raise ConnectorPlanningError(
+                f"route {route.request_id!r} segment {index} remained outside "
+                "free_space after Point32 repair"
+            )
+
+    if not changed:
+        return route
+    return CoverageRouteRecord(
+        request_id=route.request_id,
+        component_id=route.component_id,
+        source_region_id=route.source_region_id,
+        assigned_vehicle_id=route.assigned_vehicle_id,
+        frame=route.frame,
+        response_message=route.response_message,
+        waypoints=repaired,
+    )
 
 
 def connect_ordered_route_records(
@@ -597,9 +710,12 @@ def connect_ordered_route_records(
             "all routes must be assigned to the same vehicle"
         )
 
+    policy = config or ConnectorPlannerConfig()
     free_space_parts = _canonical_free_space_parts(free_space)
-    for route in route_list:
-        _validate_route_inside_free_space(route, free_space_parts)
+    route_list = tuple(
+        _normalise_route_inside_free_space(route, free_space_parts, policy)
+        for route in route_list
+    )
 
     altitude = route_list[0].waypoints[0].z_m
     for route in route_list:
@@ -623,7 +739,7 @@ def connect_ordered_route_records(
             free_space,
             LocalPoint2D(previous_end.x_m, previous_end.y_m),
             LocalPoint2D(following_start.x_m, following_start.y_m),
-            config=config,
+            config=policy,
         )
         connector = RouteConnector(
             from_request_id=previous.request_id,
