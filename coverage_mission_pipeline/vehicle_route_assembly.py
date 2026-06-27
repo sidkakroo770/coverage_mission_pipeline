@@ -440,9 +440,9 @@ def _validate_and_order_routes(
                 f"route {route.request_id!r} frame does not match vehicle reference"
             )
         try:
-            # A one-route sequence validates the planner route and normalises only
-            # sub-centimetre Point32 boundary discrepancies back onto the exact
-            # authoritative free-space geometry.
+            # A one-route sequence snaps only sub-centimetre Point32 waypoint
+            # discrepancies, then replaces any unsafe planner transition with an
+            # exact visibility-graph connector inside authoritative free space.
             checked = connect_ordered_route_records(
                 (route,),
                 free_space,

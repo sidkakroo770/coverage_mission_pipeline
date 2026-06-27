@@ -89,9 +89,11 @@ The repository currently contains eighteen layers:
     - naturally chooses the shorter clockwise or anticlockwise side for one exclusion;
     - handles multiple exclusions and concave mission boundaries without a grid resolution;
     - treats the supplied safe area as authoritative and never applies clearance twice;
-    - normalizes only sub-centimetre ROS Point32 boundary discrepancies back onto
-      the exact authoritative geometry, rebuilding affected segments inside free space;
-    - fails closed when deviations exceed the 1 cm interface tolerance, endpoints are
+    - normalizes only sub-centimetre ROS Point32 waypoint discrepancies back onto
+      the exact authoritative geometry;
+    - replaces every unsafe planner transition between valid connected endpoints with
+      an exact visibility-graph A* path inside the authoritative safe area;
+    - fails closed when waypoints exceed the 1 cm interface tolerance, endpoints are
       disconnected, or graph complexity exceeds its limit;
     - joins ordered route records at one common altitude without duplicate endpoints;
     - validates every normalized route waypoint and segment before assembly.

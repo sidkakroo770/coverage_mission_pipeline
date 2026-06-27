@@ -4,7 +4,7 @@
 import math
 
 import pytest
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points
 
 from coverage_mission_pipeline.planning_request import LocalPoint2D
@@ -571,7 +571,7 @@ def test_rejects_route_waypoint_outside_free_space(frame) -> None:
         assemble_vehicle_route(plan, [source], free_space)
 
 
-def test_rejects_route_segment_crossing_hole(frame) -> None:
+def test_repairs_route_segment_crossing_hole(frame) -> None:
     free_space = Polygon(
         [(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)],
         [[(8.0, 1.0), (12.0, 1.0), (12.0, 7.0), (8.0, 7.0)]],
@@ -580,8 +580,13 @@ def test_rejects_route_segment_crossing_hole(frame) -> None:
     reference = VehicleReference("drone-1", frame, LocalPoint2D(1.0, 5.0))
     plan = manual_plan(reference, [comp])
     source = route(comp, [(2.0, 5.0), (18.0, 5.0)])
-    with pytest.raises(VehicleRouteAssemblyError, match="segment"):
-        assemble_vehicle_route(plan, [source], free_space)
+    result = assemble_vehicle_route(plan, [source], free_space)
+    repaired = result.oriented_routes[0].source_route
+    assert len(repaired.waypoints) > 2
+    for left, right in zip(repaired.waypoints, repaired.waypoints[1:]):
+        assert free_space.covers(
+            LineString([(left.x_m, left.y_m), (right.x_m, right.y_m)])
+        )
 
 
 def test_rejects_inconsistent_altitude_within_route(frame, open_space) -> None:

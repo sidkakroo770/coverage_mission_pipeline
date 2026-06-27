@@ -556,15 +556,20 @@ def _normalise_route_inside_free_space(
     free_space_parts: tuple[Polygon, ...],
     connector_config: ConnectorPlannerConfig,
 ) -> CoverageRouteRecord:
-    """Repair only tiny ROS Point32 boundary discrepancies.
+    """Normalize a planner route against the authoritative free-space geometry.
 
     Planner request polygon vertices are transmitted through ``geometry_msgs/Point32``
     while the authoritative local geometry remains double precision. A planner route
     that terminates on the boundary it received can therefore differ from the source
     boundary by a sub-millimetre amount. Waypoints are snapped to the authoritative
     geometry only when the correction is at most the fixed 1 cm interface tolerance.
-    Any affected segment is then rebuilt through the exact connector planner, so the
-    returned route remains fully covered by the unbuffered authoritative free space.
+
+    A planner may also return a straight transition between two individually valid
+    waypoints that cuts across a concavity, exclusion, or the outer boundary. Such a
+    transition is never accepted as flown. When both endpoints lie in the same
+    connected free-space component, the unsafe segment is replaced by the exact
+    visibility-graph A* connector. Materially outside waypoints and disconnected
+    endpoints still fail closed.
     """
     repaired_points: list[CoverageWaypoint] = []
     changed = False
@@ -604,22 +609,12 @@ def _normalise_route_inside_free_space(
             for part in free_space_parts
             if part.covers(left_point) and part.covers(right_point)
         ]
-        repair_part = next(
-            (
-                part
-                for part in common_parts
-                if part.buffer(
-                    ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M,
-                    join_style=2,
-                ).covers(segment)
-            ),
-            None,
-        )
-        if repair_part is None:
+        if not common_parts:
             raise ConnectorPlanningError(
-                f"route {route.request_id!r} segment {index} leaves free_space "
-                "by more than the Point32 repair tolerance"
+                f"route {route.request_id!r} segment {index} has endpoints in "
+                "different connected free-space components"
             )
+        repair_part = common_parts[0]
 
         repair = plan_connector(
             repair_part,
