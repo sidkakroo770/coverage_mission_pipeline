@@ -12,6 +12,10 @@ setup(
             ["resource/" + package_name],
         ),
         ("share/" + package_name, ["package.xml"]),
+        (
+            "share/" + package_name + "/config",
+            ["config/swarm_mission.example.yaml"],
+        ),
     ],
     install_requires=["setuptools", "PyYAML"],
     zip_safe=True,
@@ -26,6 +30,8 @@ setup(
         "console_scripts": [
             "plan_coverage_smoke_client = "
             "coverage_mission_pipeline.plan_coverage_smoke_client:main",
+            "run_swarm_mission = "
+            "coverage_mission_pipeline.swarm_mission_cli:main",
         ],
     },
     tests_require=["pytest"],

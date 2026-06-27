@@ -157,7 +157,17 @@ The repository currently contains eighteen layers:
     - rejects unknown fields and unsafe YAML tags;
     - writes configuration files atomically and canonicalizes assignment and vehicle ordering.
 
-The package does not yet provide a production ROS CLI, upload missions to vehicles, or execute SITL verification.
+19. **Production ROS mission CLI**
+    - consumes a Swarm-Partitions JSON file, operational JSON/YAML config and new output directory;
+    - validates both input contracts completely before initializing ROS;
+    - creates a dedicated ROS node and calls `/plan_coverage` strictly sequentially;
+    - exposes explicit service discovery and per-request deadlines;
+    - destroys the node and shuts down ROS on success or failure;
+    - never overwrites an existing output path;
+    - publishes the complete artifact directory atomically only after every stage succeeds;
+    - records SHA-256 hashes of both inputs, normalized configuration, ROS client settings and run summaries.
+
+The package does not yet upload missions to vehicles or execute SITL verification.
 
 ## Operational configuration
 
@@ -200,3 +210,27 @@ Then, in a second sourced terminal:
 ```bash
 ros2 run coverage_mission_pipeline plan_coverage_smoke_client
 ```
+
+
+## Production ROS mission command
+
+Start the planner in one sourced terminal:
+
+```bash
+ros2 run polygon_coverage_ros2 coverage_planner
+```
+
+Then run the complete pipeline from another sourced terminal:
+
+```bash
+ros2 run coverage_mission_pipeline run_swarm_mission \
+  --mission-json /path/to/mission_output.json \
+  --config /path/to/swarm_mission.yaml \
+  --output /path/to/new-output-directory
+```
+
+The output directory must not already exist. The command validates geometry and
+configuration before starting ROS, calls the planner one component at a time,
+and publishes the final directory only after every route and ArduPilot export
+succeeds. In addition to the generic mission manifest, the bundle contains
+`production-run.json` and `operational-config.normalized.json` for traceability.

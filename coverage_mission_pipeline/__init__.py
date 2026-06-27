@@ -101,6 +101,20 @@ from .start_goal_policy import (
     planning_request_from_anchors,
     select_start_goal,
 )
+from .swarm_mission_cli import (
+    EXIT_ARTIFACT_ERROR,
+    EXIT_INPUT_ERROR,
+    EXIT_PLANNING_ERROR,
+    EXIT_ROS_ERROR,
+    NORMALIZED_CONFIG_FILENAME,
+    PRODUCTION_RUN_ALGORITHM,
+    PRODUCTION_RUN_FILENAME,
+    PRODUCTION_RUN_SCHEMA_VERSION,
+    ProductionMissionRunResult,
+    SwarmMissionCliError,
+    build_argument_parser,
+    run_production_swarm_mission,
+)
 from .swarm_mission_config import (
     SWARM_MISSION_CONFIG_SCHEMA_VERSION,
     SwarmMissionConfigError,
@@ -151,6 +165,18 @@ from .sequential_plan_coverage_client import (
 )
 
 __all__ = [
+    "EXIT_ARTIFACT_ERROR",
+    "EXIT_INPUT_ERROR",
+    "EXIT_PLANNING_ERROR",
+    "EXIT_ROS_ERROR",
+    "NORMALIZED_CONFIG_FILENAME",
+    "PRODUCTION_RUN_ALGORITHM",
+    "PRODUCTION_RUN_FILENAME",
+    "PRODUCTION_RUN_SCHEMA_VERSION",
+    "ProductionMissionRunResult",
+    "SwarmMissionCliError",
+    "build_argument_parser",
+    "run_production_swarm_mission",
     "SWARM_MISSION_CONFIG_SCHEMA_VERSION",
     "SwarmMissionConfigError",
     "SwarmMissionOperationalConfig",
