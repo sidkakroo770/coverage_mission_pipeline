@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains sixteen layers:
+The repository currently contains seventeen layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -134,9 +134,20 @@ The repository currently contains sixteen layers:
     - builds one ArduPilot mission for every active vehicle while preserving idle vehicles explicitly;
     - publishes component routes, complete routes, mission JSON, QGC WPL 110 files and a deterministic manifest;
     - atomically publishes the output directory only after every artifact succeeds;
-    - remains independent of `mission_output.json` and any mission-specific input adapter.
+    - remains independent of any mission-specific input adapter.
 
-The package does not yet parse `mission_output.json`, parse a mission-specific vehicle/reference schema, upload missions to vehicles, or execute SITL verification.
+17. **Swarm-Partitions JSON adapter**
+    - consumes the bug-fixed JSON contract exported by `atissss/Swarm-Partitions`;
+    - validates separate coordinate and planning CRS metadata and longitude/latitude axis order;
+    - reconstructs Polygon and MultiPolygon geometry while preserving every interior hole;
+    - accepts the currently committed exporter with no `dynamic` field and also supports that field when re-enabled;
+    - applies clearance globally to the mission boundary and no-go zones, never to shared partition borders;
+    - clips each unbuffered partition to the global safe area and preserves every connected component;
+    - rejects partition overlaps, missing coverage, malformed rings, unsafe CRS metadata and incomplete assignments;
+    - requires explicit partition-to-vehicle assignments, vehicle references and coverage-planner parameters;
+    - produces a complete `GenericMissionDefinition` and can invoke the Stage 13 pipeline directly.
+
+The package does not yet provide a production ROS CLI for the exporter JSON, upload missions to vehicles, or execute SITL verification.
 
 ## Unit tests
 

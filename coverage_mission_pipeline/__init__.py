@@ -101,6 +101,18 @@ from .start_goal_policy import (
     planning_request_from_anchors,
     select_start_goal,
 )
+from .swarm_partitions_adapter import (
+    SWARM_PARTITIONS_ADAPTER_ALGORITHM,
+    SwarmPartitionAssignment,
+    SwarmPartitionsAdapterConfig,
+    SwarmPartitionsAdapterError,
+    SwarmPartitionsAdapterResult,
+    SwarmPartitionsPipelineResult,
+    SwarmVehicleMissionProfile,
+    adapt_swarm_partitions_payload,
+    load_swarm_partitions_json,
+    run_swarm_partitions_mission_pipeline,
+)
 from .vehicle_component_ordering import (
     COMPONENT_ORDERING_ALGORITHM,
     VEHICLE_REFERENCE_SCHEMA_VERSION,
@@ -133,6 +145,16 @@ from .sequential_plan_coverage_client import (
 )
 
 __all__ = [
+    "SWARM_PARTITIONS_ADAPTER_ALGORITHM",
+    "SwarmPartitionAssignment",
+    "SwarmPartitionsAdapterConfig",
+    "SwarmPartitionsAdapterError",
+    "SwarmPartitionsAdapterResult",
+    "SwarmPartitionsPipelineResult",
+    "SwarmVehicleMissionProfile",
+    "adapt_swarm_partitions_payload",
+    "load_swarm_partitions_json",
+    "run_swarm_partitions_mission_pipeline",
     "GENERIC_MISSION_MANIFEST_SCHEMA_VERSION",
     "GENERIC_MISSION_PIPELINE_ALGORITHM",
     "ComponentPlanningSpec",
