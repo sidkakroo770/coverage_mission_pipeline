@@ -13,7 +13,7 @@ setup(
         ),
         ("share/" + package_name, ["package.xml"]),
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "PyYAML"],
     zip_safe=True,
     maintainer="sidkakroo770",
     maintainer_email="sidkakroo770@users.noreply.github.com",

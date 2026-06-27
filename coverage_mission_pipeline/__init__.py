@@ -101,6 +101,12 @@ from .start_goal_policy import (
     planning_request_from_anchors,
     select_start_goal,
 )
+from .swarm_mission_config import (
+    SWARM_MISSION_CONFIG_SCHEMA_VERSION,
+    SwarmMissionConfigError,
+    SwarmMissionOperationalConfig,
+    load_swarm_mission_operational_config,
+)
 from .swarm_partitions_adapter import (
     SWARM_PARTITIONS_ADAPTER_ALGORITHM,
     SwarmPartitionAssignment,
@@ -145,6 +151,10 @@ from .sequential_plan_coverage_client import (
 )
 
 __all__ = [
+    "SWARM_MISSION_CONFIG_SCHEMA_VERSION",
+    "SwarmMissionConfigError",
+    "SwarmMissionOperationalConfig",
+    "load_swarm_mission_operational_config",
     "SWARM_PARTITIONS_ADAPTER_ALGORITHM",
     "SwarmPartitionAssignment",
     "SwarmPartitionsAdapterConfig",

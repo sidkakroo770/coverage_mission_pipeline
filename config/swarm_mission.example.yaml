@@ -1,0 +1,48 @@
+schema_version: 1
+adapter:
+  frame_id: map
+  clearance_m: 5.0
+  min_component_area_m2: 0.0
+  coverage_gap_tolerance_m2: 0.0001
+  coverage_gap_relative_tolerance: 1.0e-9
+  partition_overlap_tolerance_m2: 1.0e-6
+assignments:
+  - partition_id: 1
+    vehicle_id: drone-1
+  - partition_id: 2
+    vehicle_id: drone-2
+vehicles:
+  - vehicle_id: drone-1
+    reference:
+      type: home
+      longitude_deg: 76.366
+      latitude_deg: 30.354
+    coverage:
+      altitude_m: 30.0
+      lateral_footprint_m: 2.0
+      lateral_overlap: 0.1
+      start_goal_boundary_clearance_m: 0.5
+      minimum_start_goal_separation_m: 1.0
+  - vehicle_id: drone-2
+    reference:
+      type: home
+      longitude_deg: 76.367
+      latitude_deg: 30.355
+    coverage:
+      altitude_m: 30.0
+      lateral_footprint_m: 2.0
+      lateral_overlap: 0.1
+      start_goal_boundary_clearance_m: 0.5
+      minimum_start_goal_separation_m: 1.0
+pipeline:
+  allow_idle_vehicles: true
+  route:
+    return_to_reference: false
+    connector:
+      max_visibility_nodes: 512
+  ardupilot:
+    end_action: rtl
+    waypoint_hold_s: 0.0
+    include_takeoff: true
+    skip_initial_reference_waypoint: true
+    minimum_relative_altitude_m: 1.0

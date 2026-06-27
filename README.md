@@ -5,7 +5,7 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains seventeen layers:
+The repository currently contains eighteen layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
@@ -147,7 +147,39 @@ The repository currently contains seventeen layers:
     - requires explicit partition-to-vehicle assignments, vehicle references and coverage-planner parameters;
     - produces a complete `GenericMissionDefinition` and can invoke the Stage 13 pipeline directly.
 
-The package does not yet provide a production ROS CLI for the exporter JSON, upload missions to vehicles, or execute SITL verification.
+18. **Operational mission configuration**
+    - stores the adapter and generic-pipeline policies in strict versioned JSON or YAML;
+    - defines partition assignments, vehicle references, coverage altitude, footprint and overlap without editing Python;
+    - defines global clearance, component-area and coverage-validation tolerances;
+    - configures A* visibility-node limits, optional return-to-reference and idle-vehicle policy;
+    - configures ArduPilot takeoff, waypoint hold, minimum altitude and terminal action;
+    - validates cross-layer constraints such as LAND requiring a return-to-reference route;
+    - rejects unknown fields and unsafe YAML tags;
+    - writes configuration files atomically and canonicalizes assignment and vehicle ordering.
+
+The package does not yet provide a production ROS CLI, upload missions to vehicles, or execute SITL verification.
+
+## Operational configuration
+
+Copy and edit the checked-in example instead of constructing adapter objects in
+Python:
+
+```bash
+cp config/swarm_mission.example.yaml swarm_mission.yaml
+```
+
+Load it with:
+
+```python
+from coverage_mission_pipeline import load_swarm_mission_operational_config
+
+config = load_swarm_mission_operational_config("swarm_mission.yaml")
+adapter_config = config.adapter
+pipeline_config = config.pipeline
+```
+
+The same file will be consumed by the production ROS command-line entry point.
+Both `.json` and `.yaml`/`.yml` are supported.
 
 ## Unit tests
 
