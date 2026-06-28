@@ -16,6 +16,7 @@ from coverage_mission_pipeline.ardupilot_mission import (
     MAV_CMD_NAV_RETURN_TO_LAUNCH,
     MAV_CMD_NAV_TAKEOFF,
     MAV_CMD_NAV_WAYPOINT,
+    MAV_FRAME_GLOBAL,
     MAV_FRAME_GLOBAL_RELATIVE_ALT,
     QGC_WPL_110_HEADER,
     ArduPilotMission,
@@ -148,6 +149,7 @@ def basic_mission() -> ArduPilotMission:
 
 
 def test_constants_match_mavlink_values() -> None:
+    assert MAV_FRAME_GLOBAL == 0
     assert MAV_FRAME_GLOBAL_RELATIVE_ALT == 3
     assert MAV_CMD_NAV_WAYPOINT == 16
     assert MAV_CMD_NAV_RETURN_TO_LAUNCH == 20
@@ -563,6 +565,26 @@ def test_wpl_header_and_field_count() -> None:
     assert all(len(line.split()) == 12 for line in lines[1:])
 
 
+def test_wpl_prepends_synthetic_home_and_shifts_semantic_items() -> None:
+    mission = basic_mission()
+    lines = mission.to_qgc_wpl_110().splitlines()
+    assert len(lines) == len(mission.items) + 2
+
+    home = lines[1].split()
+    assert [int(home[index]) for index in range(4)] == [0, 1, 0, 16]
+    assert float(home[8]) == pytest.approx(30.0)
+    assert float(home[9]) == pytest.approx(76.0)
+    assert float(home[10]) == 0.0
+
+    takeoff = lines[2].split()
+    assert [int(takeoff[index]) for index in range(4)] == [1, 0, 3, 22]
+    assert float(takeoff[10]) == pytest.approx(30.0)
+
+    terminal = lines[-1].split()
+    assert int(terminal[0]) == len(mission.items)
+    assert int(terminal[3]) == MAV_CMD_NAV_RETURN_TO_LAUNCH
+
+
 def test_wpl_is_tab_separated() -> None:
     line = basic_mission().to_qgc_wpl_110().splitlines()[1]
     assert line.count("\t") == 11
@@ -574,6 +596,62 @@ def test_wpl_round_trip() -> None:
         mission.to_qgc_wpl_110(), vehicle_id="drone-1"
     )
     assert parsed == mission
+
+
+def test_wpl_parser_accepts_legacy_file_without_synthetic_home() -> None:
+    mission = basic_mission()
+    legacy = QGC_WPL_110_HEADER + "\n" + "\n".join(
+        item.to_wpl_line() for item in mission.items
+    ) + "\n"
+    assert ArduPilotMission.from_qgc_wpl_110(
+        legacy,
+        vehicle_id="drone-1",
+    ) == mission
+
+
+def test_wpl_parser_rejects_home_without_semantic_items() -> None:
+    home = basic_mission().to_qgc_wpl_110().splitlines()[1]
+    with pytest.raises(ArduPilotMissionError, match="no mission items"):
+        ArduPilotMission.from_qgc_wpl_110(
+            QGC_WPL_110_HEADER + "\n" + home + "\n",
+            vehicle_id="drone-1",
+        )
+
+
+def test_wpl_parser_rejects_nonzero_home_parameters() -> None:
+    lines = basic_mission().to_qgc_wpl_110().splitlines()
+    fields = lines[1].split()
+    fields[4] = "1"
+    lines[1] = "\t".join(fields)
+    with pytest.raises(ArduPilotMissionError, match="home row"):
+        ArduPilotMission.from_qgc_wpl_110(
+            "\n".join(lines) + "\n",
+            vehicle_id="drone-1",
+        )
+
+
+def test_wpl_parser_rejects_shifted_sequence_gap() -> None:
+    lines = basic_mission().to_qgc_wpl_110().splitlines()
+    fields = lines[3].split()
+    fields[0] = "99"
+    lines[3] = "\t".join(fields)
+    with pytest.raises(ArduPilotMissionError, match="sequence must be"):
+        ArduPilotMission.from_qgc_wpl_110(
+            "\n".join(lines) + "\n",
+            vehicle_id="drone-1",
+        )
+
+
+def test_wpl_parser_rejects_home_coordinate_mismatch() -> None:
+    lines = basic_mission().to_qgc_wpl_110().splitlines()
+    fields = lines[1].split()
+    fields[8] = "31.0"
+    lines[1] = "\t".join(fields)
+    with pytest.raises(ArduPilotMissionError, match="home coordinates"):
+        ArduPilotMission.from_qgc_wpl_110(
+            "\n".join(lines) + "\n",
+            vehicle_id="drone-1",
+        )
 
 
 def test_wpl_parser_ignores_comments_and_blank_lines() -> None:

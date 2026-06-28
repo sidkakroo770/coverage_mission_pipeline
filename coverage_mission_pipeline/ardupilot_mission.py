@@ -28,6 +28,7 @@ from .complete_vehicle_route_record import (
 ARDUPILOT_MISSION_SCHEMA_VERSION = 1
 QGC_WPL_110_HEADER = "QGC WPL 110"
 
+MAV_FRAME_GLOBAL = 0
 MAV_FRAME_GLOBAL_RELATIVE_ALT = 3
 MAV_CMD_NAV_WAYPOINT = 16
 MAV_CMD_NAV_RETURN_TO_LAUNCH = 20
@@ -124,6 +125,38 @@ def _format_float(value: float) -> str:
     if _is_zero(value):
         value = 0.0
     return f"{value:.10f}"
+
+
+def _wpl_line(
+    *,
+    seq: int,
+    current: int,
+    frame: int,
+    command: int,
+    param1: float,
+    param2: float,
+    param3: float,
+    param4: float,
+    latitude_deg: float,
+    longitude_deg: float,
+    altitude_m: float,
+    autocontinue: int,
+) -> str:
+    fields = (
+        str(seq),
+        str(current),
+        str(frame),
+        str(command),
+        _format_float(param1),
+        _format_float(param2),
+        _format_float(param3),
+        _format_float(param4),
+        _format_float(latitude_deg),
+        _format_float(longitude_deg),
+        _format_float(altitude_m),
+        str(autocontinue),
+    )
+    return "\t".join(fields)
 
 
 @dataclass(frozen=True)
@@ -288,21 +321,20 @@ class ArduPilotMissionItem:
             raise ArduPilotMissionError(f"{path} is invalid: {exc}") from exc
 
     def to_wpl_line(self) -> str:
-        fields = (
-            str(self.seq),
-            str(self.current),
-            str(self.frame),
-            str(self.command),
-            _format_float(self.param1),
-            _format_float(self.param2),
-            _format_float(self.param3),
-            _format_float(self.param4),
-            _format_float(self.latitude_deg),
-            _format_float(self.longitude_deg),
-            _format_float(self.altitude_m),
-            str(self.autocontinue),
+        return _wpl_line(
+            seq=self.seq,
+            current=self.current,
+            frame=self.frame,
+            command=self.command,
+            param1=self.param1,
+            param2=self.param2,
+            param3=self.param3,
+            param4=self.param4,
+            latitude_deg=self.latitude_deg,
+            longitude_deg=self.longitude_deg,
+            altitude_m=self.altitude_m,
+            autocontinue=self.autocontinue,
         )
-        return "\t".join(fields)
 
 
 @dataclass(frozen=True)
@@ -483,9 +515,53 @@ class ArduPilotMission:
         return cls.from_dict(value)
 
     def to_qgc_wpl_110(self) -> str:
-        return QGC_WPL_110_HEADER + "\n" + "\n".join(
-            item.to_wpl_line() for item in self.items
-        ) + "\n"
+        """Serialize with the QGC WPL synthetic-home convention.
+
+        QGC WPL 110 readers treat row zero as home metadata rather than a
+        mission command.  A dedicated synthetic home row is therefore emitted
+        before every semantic mission item.  Semantic item sequence numbers are
+        shifted by one in the text file and restored by the parser.
+        """
+        home_source = next(
+            item for item in self.items if item.command in _LOCATION_COMMANDS
+        )
+        home_line = _wpl_line(
+            seq=0,
+            current=1,
+            frame=MAV_FRAME_GLOBAL,
+            command=MAV_CMD_NAV_WAYPOINT,
+            param1=0.0,
+            param2=0.0,
+            param3=0.0,
+            param4=0.0,
+            latitude_deg=home_source.latitude_deg,
+            longitude_deg=home_source.longitude_deg,
+            altitude_m=0.0,
+            autocontinue=1,
+        )
+        mission_lines = [
+            _wpl_line(
+                seq=index,
+                current=0,
+                frame=item.frame,
+                command=item.command,
+                param1=item.param1,
+                param2=item.param2,
+                param3=item.param3,
+                param4=item.param4,
+                latitude_deg=item.latitude_deg,
+                longitude_deg=item.longitude_deg,
+                altitude_m=item.altitude_m,
+                autocontinue=item.autocontinue,
+            )
+            for index, item in enumerate(self.items, start=1)
+        ]
+        return (
+            QGC_WPL_110_HEADER
+            + "\n"
+            + "\n".join([home_line, *mission_lines])
+            + "\n"
+        )
 
     @classmethod
     def from_qgc_wpl_110(
@@ -501,7 +577,8 @@ class ArduPilotMission:
             raise ArduPilotMissionError(
                 f"QGC WPL input must begin with {QGC_WPL_110_HEADER!r}"
             )
-        items: list[ArduPilotMissionItem] = []
+
+        rows: list[tuple[int, list[str]]] = []
         for line_number, raw_line in enumerate(lines[1:], start=2):
             line = raw_line.strip()
             if not line or line.startswith("#"):
@@ -511,27 +588,169 @@ class ArduPilotMission:
                 raise ArduPilotMissionError(
                     f"QGC WPL line {line_number} must contain exactly 12 fields"
                 )
+            rows.append((line_number, fields))
+        if not rows:
+            raise ArduPilotMissionError("QGC WPL input contains no mission rows")
+
+        def parsed_fields(
+            line_number: int,
+            fields: list[str],
+        ) -> tuple[int, int, int, int, float, float, float, float, float, float, float, int]:
+            try:
+                return (
+                    int(fields[0]),
+                    int(fields[1]),
+                    int(fields[2]),
+                    int(fields[3]),
+                    float(fields[4]),
+                    float(fields[5]),
+                    float(fields[6]),
+                    float(fields[7]),
+                    float(fields[8]),
+                    float(fields[9]),
+                    float(fields[10]),
+                    int(fields[11]),
+                )
+            except ValueError as exc:
+                raise ArduPilotMissionError(
+                    f"QGC WPL line {line_number} is invalid: {exc}"
+                ) from exc
+
+        parsed_rows = [
+            (line_number, parsed_fields(line_number, fields))
+            for line_number, fields in rows
+        ]
+        first_values = parsed_rows[0][1]
+        has_home_row = (
+            first_values[0] == 0
+            and first_values[1] == 1
+            and first_values[2] == MAV_FRAME_GLOBAL
+            and first_values[3] == MAV_CMD_NAV_WAYPOINT
+        )
+
+        home_coordinates: Optional[tuple[float, float]] = None
+        if has_home_row:
+            (
+                seq,
+                current,
+                frame,
+                command,
+                param1,
+                param2,
+                param3,
+                param4,
+                latitude_deg,
+                longitude_deg,
+                altitude_m,
+                autocontinue,
+            ) = first_values
+            del seq, current, frame, command
+            if any(
+                not _is_zero(value)
+                for value in (param1, param2, param3, param4)
+            ):
+                raise ArduPilotMissionError(
+                    "QGC WPL synthetic home row must use zero parameters"
+                )
+            if not -90.0 <= latitude_deg <= 90.0:
+                raise ArduPilotMissionError(
+                    "QGC WPL synthetic home latitude must be in [-90, 90]"
+                )
+            if not -180.0 <= longitude_deg <= 180.0:
+                raise ArduPilotMissionError(
+                    "QGC WPL synthetic home longitude must be in [-180, 180]"
+                )
+            if not math.isfinite(altitude_m):
+                raise ArduPilotMissionError(
+                    "QGC WPL synthetic home altitude must be finite"
+                )
+            if autocontinue != 1:
+                raise ArduPilotMissionError(
+                    "QGC WPL synthetic home row must use autocontinue=1"
+                )
+            home_coordinates = (latitude_deg, longitude_deg)
+            parsed_rows = parsed_rows[1:]
+            if not parsed_rows:
+                raise ArduPilotMissionError(
+                    "QGC WPL input contains a home row but no mission items"
+                )
+
+        items: list[ArduPilotMissionItem] = []
+        for index, (line_number, values) in enumerate(parsed_rows):
+            (
+                seq,
+                current,
+                frame,
+                command,
+                param1,
+                param2,
+                param3,
+                param4,
+                latitude_deg,
+                longitude_deg,
+                altitude_m,
+                autocontinue,
+            ) = values
+            if has_home_row:
+                expected_seq = index + 1
+                if seq != expected_seq:
+                    raise ArduPilotMissionError(
+                        f"QGC WPL line {line_number} sequence must be {expected_seq}"
+                    )
+                if current != 0:
+                    raise ArduPilotMissionError(
+                        f"QGC WPL line {line_number} mission item must use current=0"
+                    )
+                model_seq = index
+                model_current = 1 if index == 0 else 0
+            else:
+                model_seq = seq
+                model_current = current
             try:
                 item = ArduPilotMissionItem(
-                    seq=int(fields[0]),
-                    current=int(fields[1]),
-                    frame=int(fields[2]),
-                    command=int(fields[3]),
-                    param1=float(fields[4]),
-                    param2=float(fields[5]),
-                    param3=float(fields[6]),
-                    param4=float(fields[7]),
-                    latitude_deg=float(fields[8]),
-                    longitude_deg=float(fields[9]),
-                    altitude_m=float(fields[10]),
-                    autocontinue=int(fields[11]),
+                    seq=model_seq,
+                    current=model_current,
+                    frame=frame,
+                    command=command,
+                    param1=param1,
+                    param2=param2,
+                    param3=param3,
+                    param4=param4,
+                    latitude_deg=latitude_deg,
+                    longitude_deg=longitude_deg,
+                    altitude_m=altitude_m,
+                    autocontinue=autocontinue,
                 )
-            except (ValueError, ArduPilotMissionError) as exc:
+            except ArduPilotMissionError as exc:
                 raise ArduPilotMissionError(
                     f"QGC WPL line {line_number} is invalid: {exc}"
                 ) from exc
             items.append(item)
-        return cls(vehicle_id=vehicle_id, items=tuple(items))
+
+        mission = cls(vehicle_id=vehicle_id, items=tuple(items))
+        if home_coordinates is not None:
+            first_location = next(
+                item for item in mission.items if item.command in _LOCATION_COMMANDS
+            )
+            if not (
+                math.isclose(
+                    home_coordinates[0],
+                    first_location.latitude_deg,
+                    rel_tol=0.0,
+                    abs_tol=_POSITION_TOLERANCE_DEG,
+                )
+                and math.isclose(
+                    home_coordinates[1],
+                    first_location.longitude_deg,
+                    rel_tol=0.0,
+                    abs_tol=_POSITION_TOLERANCE_DEG,
+                )
+            ):
+                raise ArduPilotMissionError(
+                    "QGC WPL synthetic home coordinates must match the first "
+                    "positional mission item"
+                )
+        return mission
 
     @property
     def json_filename(self) -> str:

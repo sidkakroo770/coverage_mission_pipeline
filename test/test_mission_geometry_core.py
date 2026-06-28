@@ -15,6 +15,7 @@ from shapely.ops import unary_union
 from coverage_mission_pipeline.mission_geometry_core import (
     GeometryCoreError,
     clip_partition_to_safe_area,
+    create_operational_route_space,
     create_safe_area,
     extract_polygon_components,
     prepare_partition_components,
@@ -260,3 +261,40 @@ def test_invalid_bow_tie_polygon_is_rejected() -> None:
             exclusions=[],
             clearance_m=0.0,
         )
+
+
+class TestOperationalRouteSpace:
+    def test_zero_margin_preserves_safe_area(self):
+        safe = box(0.0, 0.0, 100.0, 100.0)
+        assert create_operational_route_space(safe, 0.0).equals(safe)
+
+    def test_positive_margin_erodes_every_outer_edge(self):
+        safe = box(0.0, 0.0, 100.0, 100.0)
+        route = create_operational_route_space(safe, 2.0)
+        assert route.bounds == pytest.approx((2.0, 2.0, 98.0, 98.0))
+        assert safe.covers(route)
+
+    def test_positive_margin_expands_hole_reserve(self):
+        safe = Polygon(
+            [(0, 0), (100, 0), (100, 100), (0, 100)],
+            holes=[[(40, 40), (60, 40), (60, 60), (40, 60)]],
+        )
+        route = create_operational_route_space(safe, 2.0)
+        assert route.area < safe.area
+        assert Point(38.5, 50.0).within(safe)
+        assert not route.covers(Point(38.5, 50.0))
+
+    @pytest.mark.parametrize("value", [-1.0, float("nan"), True, "2"])
+    def test_invalid_margin_rejected(self, value):
+        with pytest.raises(GeometryCoreError):
+            create_operational_route_space(
+                box(0.0, 0.0, 100.0, 100.0),
+                value,
+            )
+
+    def test_margin_that_erases_geometry_rejected(self):
+        with pytest.raises(GeometryCoreError, match="no operational route space"):
+            create_operational_route_space(
+                box(0.0, 0.0, 10.0, 10.0),
+                6.0,
+            )

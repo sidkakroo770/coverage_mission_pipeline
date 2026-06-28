@@ -250,11 +250,11 @@ def test_planning_parameters_come_from_vehicle_profile():
     assert first.start_goal_policy.boundary_clearance_m == 1.5
 
 
-def test_all_vehicles_receive_authoritative_global_safe_area():
+def test_all_vehicles_receive_operational_route_space():
     result = adapt_swarm_partitions_payload(_payload(), _config())
     free_spaces = result.definition.free_space_by_vehicle_id
     assert free_spaces["drone-1"].equals(free_spaces["drone-2"])
-    assert free_spaces["drone-1"].equals(result.safe_area_local)
+    assert free_spaces["drone-1"].equals(result.route_space_local)
 
 
 def test_dynamic_key_is_not_required():
@@ -316,6 +316,57 @@ def test_clearance_uses_global_safe_area_rule():
     assert result.safe_area_projected.bounds == pytest.approx(
         (300010.0, 3200010.0, 300990.0, 3200990.0)
     )
+
+
+def test_tracking_margin_erodes_safe_area_only_for_route_planning():
+    result = adapt_swarm_partitions_payload(
+        _payload(),
+        _config(clearance_m=10.0, tracking_margin_m=2.0),
+    )
+    assert result.safe_area_projected.bounds == pytest.approx(
+        (300010.0, 3200010.0, 300990.0, 3200990.0)
+    )
+    assert result.route_space_projected.bounds == pytest.approx(
+        (300012.0, 3200012.0, 300988.0, 3200988.0)
+    )
+    assert result.tracking_margin_m == 2.0
+    assert result.safe_area_projected.covers(result.route_space_projected)
+    assert result.route_space_projected.area < result.safe_area_projected.area
+
+
+def test_components_and_connectors_use_route_space_not_authoritative_safe_area():
+    result = adapt_swarm_partitions_payload(
+        _payload(),
+        _config(tracking_margin_m=2.0),
+    )
+    for component in result.definition.components:
+        assert result.route_space_local.covers(component.polygon)
+    for free_space in result.definition.free_space_by_vehicle_id.values():
+        assert free_space.equals(result.route_space_local)
+        assert not free_space.equals(result.safe_area_local)
+
+
+def test_reference_inside_safe_area_but_inside_tracking_band_is_rejected():
+    config = _config(
+        tracking_margin_m=20.0,
+        vehicles=(
+            _profile("drone-1", 300010.0, 3200500.0),
+            _profile("drone-2", 300900.0, 3200500.0),
+        ),
+    )
+    with pytest.raises(
+        SwarmPartitionsAdapterError,
+        match="outside the operational route space",
+    ):
+        adapt_swarm_partitions_payload(_payload(), config)
+
+
+def test_tracking_margin_that_removes_all_route_space_fails_closed():
+    with pytest.raises(SwarmPartitionsAdapterError, match="no operational route space"):
+        adapt_swarm_partitions_payload(
+            _payload(),
+            _config(tracking_margin_m=600.0),
+        )
 
 
 def test_multipolygon_partition_preserves_every_component():
@@ -551,7 +602,7 @@ def test_reference_outside_safe_area_rejected():
             _profile("drone-2", 300900, 3200500),
         )
     )
-    with pytest.raises(SwarmPartitionsAdapterError, match="outside the safe area"):
+    with pytest.raises(SwarmPartitionsAdapterError, match="outside the operational route space"):
         adapt_swarm_partitions_payload(_payload(), config)
 
 
@@ -587,6 +638,12 @@ def test_duplicate_assignment_partition_id_rejected():
                 _profile("drone-2", 300900, 3200500),
             ),
         )
+
+
+@pytest.mark.parametrize("value", [-1.0, float("nan"), True, "2"])
+def test_adapter_tracking_margin_validation(value):
+    with pytest.raises(SwarmPartitionsAdapterError, match="tracking_margin_m"):
+        _config(tracking_margin_m=value)
 
 
 def test_duplicate_vehicle_profile_id_rejected():
@@ -671,6 +728,8 @@ def test_summary_is_deterministic():
     first = adapt_swarm_partitions_payload(_payload(), _config())
     second = adapt_swarm_partitions_payload(_payload(), _config())
     assert first.to_summary_dict() == second.to_summary_dict()
+    assert first.to_summary_dict()["tracking_margin_m"] == 0.0
+    assert first.to_summary_dict()["route_space_m2"] == pytest.approx(BOUNDARY.area)
 
 
 def test_end_to_end_convenience_runner_from_payload():

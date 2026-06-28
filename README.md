@@ -5,12 +5,13 @@ Higher-level mission geometry preparation and orchestration for the
 
 ## Current scope
 
-The repository currently contains eighteen layers:
+The repository currently contains nineteen layers:
 
 1. **Geometry core**
    - applies clearance to the global mission boundary and exclusions;
    - leaves shared partition boundaries unbuffered;
-   - clips partitions to the global safe area;
+   - derives an operational route space by eroding the safe area by a configurable tracking margin;
+   - clips partitions to the operational route space;
    - preserves every connected polygon component;
    - rejects invalid geometry explicitly.
 
@@ -88,7 +89,7 @@ The repository currently contains eighteen layers:
     - otherwise builds a polygon-vertex visibility graph and runs deterministic A*;
     - naturally chooses the shorter clockwise or anticlockwise side for one exclusion;
     - handles multiple exclusions and concave mission boundaries without a grid resolution;
-    - treats the supplied safe area as authoritative and never applies clearance twice;
+    - treats the supplied operational route space as authoritative and never applies clearance twice;
     - normalizes only sub-centimetre ROS Point32 waypoint discrepancies back onto
       the exact authoritative geometry;
     - replaces every unsafe planner transition between valid connected endpoints with
@@ -127,6 +128,7 @@ The repository currently contains eighteen layers:
     - validates consecutive sequence numbers, current flags and command parameters;
     - serializes deterministic strict mission JSON;
     - exports and parses the twelve-field `QGC WPL 110` waypoint format;
+    - prepends the required synthetic QGC home row so semantic item 0, including TAKEOFF, survives MAVProxy upload;
     - rejects idle vehicles instead of silently omitting them;
     - writes JSON and `.waypoints` files atomically.
 
@@ -147,7 +149,9 @@ The repository currently contains eighteen layers:
     - reconstructs Polygon and MultiPolygon geometry while preserving every interior hole;
     - accepts the currently committed exporter with no `dynamic` field and also supports that field when re-enabled;
     - applies clearance globally to the mission boundary and no-go zones, never to shared partition borders;
-    - clips each unbuffered partition to the global safe area and preserves every connected component;
+    - preserves the clearance-derived safe area as the physical safety contract;
+    - erodes that safe area by `tracking_margin_m` for planner components and connectors;
+    - clips each unbuffered partition to the operational route space and preserves every connected component;
     - rejects partition overlaps, missing coverage, malformed rings, unsafe CRS metadata and incomplete assignments;
     - requires explicit partition-to-vehicle assignments, vehicle references and coverage-planner parameters;
     - produces a complete `GenericMissionDefinition` and can invoke the Stage 13 pipeline directly.
@@ -155,7 +159,7 @@ The repository currently contains eighteen layers:
 18. **Operational mission configuration**
     - stores the adapter and generic-pipeline policies in strict versioned JSON or YAML;
     - defines partition assignments, vehicle references, coverage altitude, footprint and overlap without editing Python;
-    - defines global clearance, component-area and coverage-validation tolerances;
+    - defines physical clearance, controller tracking margin, component-area and coverage-validation tolerances;
     - configures A* visibility-node limits, optional return-to-reference and idle-vehicle policy;
     - configures ArduPilot takeoff, waypoint hold, minimum altitude and terminal action;
     - validates cross-layer constraints such as LAND requiring a return-to-reference route;
@@ -195,6 +199,13 @@ pipeline_config = config.pipeline
 
 The same file will be consumed by the production ROS command-line entry point.
 Both `.json` and `.yaml`/`.yml` are supported.
+
+`adapter.clearance_m` is the required physical centreline clearance from the
+mission boundary and exclusions. `adapter.tracking_margin_m` is an additional
+reserve used only to generate planner components and connectors. For example,
+`clearance_m: 10.0` and `tracking_margin_m: 2.0` generate route centrelines at
+least 12 m from the original geometry while retaining 10 m as the authoritative
+flight-safety contract.
 
 ## Unit tests
 
