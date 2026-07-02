@@ -1,0 +1,405 @@
+{
+  "all_flown_trajectories_inside_safe_area": true,
+  "all_planned_routes_inside_route_space": true,
+  "bundle": {
+    "filename": "stage21d-input.zip",
+    "manifest_entries_checked": 94,
+    "manifest_failures": 0,
+    "sha256": "1408c40baa959fef6787b6ada2ad2d7a980eee1f93690b9b807d621a3f31fff5"
+  },
+  "former_failure_resolved": {
+    "drone_2_crosses_buffered_no_go_2": false,
+    "drone_2_crosses_no_go_2": false,
+    "drone_4_crosses_buffered_no_go_2": false,
+    "drone_4_crosses_no_go_2": false,
+    "resolved": true
+  },
+  "method": {
+    "flown_test": "Every launched telemetry point and straight segment between consecutive approximately 0.5 s snapshots tested against authoritative normalized safe_area_local.",
+    "geometry": "Reconstructed with the bundled Stage 21 source using adapt_swarm_partitions_payload and the exact input/config hashes.",
+    "planned_route_test": "Every complete-route local waypoint and straight segment tested against authoritative normalized route_space_local.",
+    "sampling_limit": "A detected crossing is conclusive. A non-detection is limited by the approximately 0.5 s telemetry sampling interval and straight interpolation between samples."
+  },
+  "preconditions": {
+    "fleet_execution_passed": true,
+    "stage21b_static_audit_passed": true,
+    "telemetry_preflight_passed": true,
+    "upload_readback_verified": true
+  },
+  "provenance": {
+    "clearance_m": 10.0,
+    "mission_output_sha256": "cdbd56a41c2dee9d1799be576ec47da100ce3a442e099c37f306fe65f7ad66ec",
+    "operational_config_sha256": "82eba3720054f4b4df9d7bede9859ec8e245e02e546f1811c1b8e19941f587a9",
+    "production_run_hashes_match": true,
+    "projected_crs": "EPSG:32643",
+    "route_space_m2": 557737.0195495727,
+    "safe_area_m2": 566006.5513383605,
+    "tracking_margin_m": 2.0
+  },
+  "schema_version": 1,
+  "separation": {
+    "csv_pairs": {
+      "drone-1|drone-2": {
+        "horizontal_m_at_minimum": 24.60088604732175,
+        "minimum_3d_separation_m": 24.600890030917785,
+        "time_s": 702.1213793930001,
+        "vertical_m_at_minimum": 0.013999999999999346
+      },
+      "drone-1|drone-3": {
+        "horizontal_m_at_minimum": 139.36288323680708,
+        "minimum_3d_separation_m": 139.36288367092553,
+        "time_s": 167.97812902299847,
+        "vertical_m_at_minimum": 0.010999999999999233
+      },
+      "drone-1|drone-4": {
+        "horizontal_m_at_minimum": 90.87066549268125,
+        "minimum_3d_separation_m": 90.87066549818358,
+        "time_s": 710.2403685579993,
+        "vertical_m_at_minimum": 0.0009999999999976694
+      },
+      "drone-1|drone-5": {
+        "horizontal_m_at_minimum": 154.8990395234603,
+        "minimum_3d_separation_m": 154.8990395266882,
+        "time_s": 673.6829435659984,
+        "vertical_m_at_minimum": 0.0010000000000012221
+      },
+      "drone-2|drone-3": {
+        "horizontal_m_at_minimum": 113.74878005348945,
+        "minimum_3d_separation_m": 114.75562377355247,
+        "time_s": 27.550430741999666,
+        "vertical_m_at_minimum": 15.168
+      },
+      "drone-2|drone-4": {
+        "horizontal_m_at_minimum": 99.71161106199077,
+        "minimum_3d_separation_m": 99.71161166874056,
+        "time_s": 572.6764712029999,
+        "vertical_m_at_minimum": 0.010999999999999233
+      },
+      "drone-2|drone-5": {
+        "horizontal_m_at_minimum": 347.71411634166515,
+        "minimum_3d_separation_m": 347.7793365458406,
+        "time_s": 826.4582772119993,
+        "vertical_m_at_minimum": 6.734999999999999
+      },
+      "drone-3|drone-4": {
+        "horizontal_m_at_minimum": 54.32359894793989,
+        "minimum_3d_separation_m": 54.32359953700248,
+        "time_s": 61.35740864299987,
+        "vertical_m_at_minimum": 0.008000000000002672
+      },
+      "drone-3|drone-5": {
+        "horizontal_m_at_minimum": 193.0142038409518,
+        "minimum_3d_separation_m": 193.01420458960138,
+        "time_s": 66.94617714099877,
+        "vertical_m_at_minimum": 0.01699999999999946
+      },
+      "drone-4|drone-5": {
+        "horizontal_m_at_minimum": 36.862855089997254,
+        "minimum_3d_separation_m": 36.86285814184972,
+        "time_s": 252.7910389439985,
+        "vertical_m_at_minimum": 0.015000000000000568
+      }
+    },
+    "csv_snapshot_overall_minimum": {
+      "horizontal_m_at_minimum": 24.60088604732175,
+      "minimum_3d_separation_m": 24.600890030917785,
+      "pair": "drone-1|drone-2",
+      "time_s": 702.1213793930001,
+      "vertical_m_at_minimum": 0.013999999999999346
+    },
+    "live_monitor_overall_minimum": {
+      "horizontal_m_at_minimum": 24.39563372813257,
+      "minimum_3d_separation_m": 24.39563897497254,
+      "pair": "drone-1|drone-2",
+      "time_s": 701.9791468499989,
+      "vertical_m_at_minimum": 0.01600000000000179
+    },
+    "official_conservative_minimum_m": 24.39563897497254,
+    "passed": true,
+    "warning_count": 0
+  },
+  "stage": "21D",
+  "status": "PASSED",
+  "vehicles": {
+    "drone-1": {
+      "execution": {
+        "completed": true,
+        "final_disarmed": true,
+        "final_home_distance_m": 0.022467544033626705,
+        "final_landed_state": 1,
+        "maximum_relative_altitude_m": 20.018,
+        "maximum_tracking_reserve_consumed_m": 0.7223777543211067,
+        "minimum_residual_physical_clearance_m": 1.2776222455881818,
+        "outside_safe_area_length_m": 0.0,
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 18.885847133038304,
+        "return_min_distance_raw_no_go_2_m": 30.388989405910053,
+        "return_samples": 112,
+        "return_start_wire_sequence": 80,
+        "return_unsafe_points": 0,
+        "return_unsafe_segments": 0,
+        "samples": 1804,
+        "segments": 1803,
+        "tracking_error_m": {
+          "maximum": 0.9194487127176372,
+          "median": 0.01118783320204013,
+          "p95": 0.4025586705678472,
+          "p99": 0.6834347992937259,
+          "samples_above_2m": 0
+        },
+        "tracking_samples": 1765,
+        "unsafe_points": 0,
+        "unsafe_segments": 0
+      },
+      "mission": {
+        "contains_rtl": false,
+        "land_at_home": true,
+        "semantic_item_count": 82,
+        "terminal_command": "MAV_CMD_NAV_LAND"
+      },
+      "passed": true,
+      "planned_route": {
+        "minimum_distance_to_physical_safe_boundary_m": 2.00000002461886,
+        "return_connector_algorithm": "direct_segment_v1",
+        "return_connector_length_m": 330.51692934261445,
+        "return_connector_span": [
+          79,
+          80
+        ],
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 23.8075413799013,
+        "return_min_distance_raw_no_go_2_m": 34.15429911955402,
+        "segments": 80,
+        "unsafe_segments": 0,
+        "unsafe_waypoints": 0,
+        "waypoints": 81
+      }
+    },
+    "drone-2": {
+      "execution": {
+        "completed": true,
+        "final_disarmed": true,
+        "final_home_distance_m": 0.04493508738665389,
+        "final_landed_state": 1,
+        "maximum_relative_altitude_m": 20.015,
+        "maximum_tracking_reserve_consumed_m": 0.8161772916166391,
+        "minimum_residual_physical_clearance_m": 0.6261566289301462,
+        "outside_safe_area_length_m": 0.0,
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 0.6701799594697213,
+        "return_min_distance_raw_no_go_2_m": 12.449155766589973,
+        "return_samples": 111,
+        "return_start_wire_sequence": 182,
+        "return_unsafe_points": 0,
+        "return_unsafe_segments": 0,
+        "samples": 1627,
+        "segments": 1626,
+        "tracking_error_m": {
+          "maximum": 0.8188093392326877,
+          "median": 0.02050762966242472,
+          "p95": 0.4009663595310094,
+          "p99": 0.6844649395493095,
+          "samples_above_2m": 0
+        },
+        "tracking_samples": 1588,
+        "unsafe_points": 0,
+        "unsafe_segments": 0
+      },
+      "mission": {
+        "contains_rtl": false,
+        "land_at_home": true,
+        "semantic_item_count": 185,
+        "terminal_command": "MAV_CMD_NAV_LAND"
+      },
+      "passed": true,
+      "planned_route": {
+        "minimum_distance_to_physical_safe_boundary_m": 2.0000017661702434,
+        "return_connector_algorithm": "visibility_graph_astar_v1",
+        "return_connector_length_m": 717.0960519249185,
+        "return_connector_span": [
+          181,
+          183
+        ],
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 2.0342152212954163,
+        "return_min_distance_raw_no_go_2_m": 12.205291836344689,
+        "segments": 183,
+        "unsafe_segments": 0,
+        "unsafe_waypoints": 0,
+        "waypoints": 184
+      }
+    },
+    "drone-3": {
+      "execution": {
+        "completed": true,
+        "final_disarmed": true,
+        "final_home_distance_m": 0.029592581196665392,
+        "final_landed_state": 1,
+        "maximum_relative_altitude_m": 20.019,
+        "maximum_tracking_reserve_consumed_m": 0.7833829863572505,
+        "minimum_residual_physical_clearance_m": 1.216617013512982,
+        "outside_safe_area_length_m": 0.0,
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 157.25171367107865,
+        "return_min_distance_raw_no_go_2_m": 167.25171367089112,
+        "return_samples": 41,
+        "return_start_wire_sequence": 54,
+        "return_unsafe_points": 0,
+        "return_unsafe_segments": 0,
+        "samples": 712,
+        "segments": 711,
+        "tracking_error_m": {
+          "maximum": 0.7908957824384005,
+          "median": 0.019983017346835323,
+          "p95": 0.5274284559046197,
+          "p99": 0.7284423725100223,
+          "samples_above_2m": 0
+        },
+        "tracking_samples": 672,
+        "unsafe_points": 0,
+        "unsafe_segments": 0
+      },
+      "mission": {
+        "contains_rtl": false,
+        "land_at_home": true,
+        "semantic_item_count": 55,
+        "terminal_command": "MAV_CMD_NAV_LAND"
+      },
+      "passed": true,
+      "planned_route": {
+        "minimum_distance_to_physical_safe_boundary_m": 2.0000019613729765,
+        "return_connector_algorithm": "trivial_same_point_v1",
+        "return_connector_length_m": 0.0,
+        "return_connector_span": [
+          53,
+          53
+        ],
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 171.1967118555016,
+        "return_min_distance_raw_no_go_2_m": 181.19671185536106,
+        "segments": 53,
+        "unsafe_segments": 0,
+        "unsafe_waypoints": 0,
+        "waypoints": 54
+      }
+    },
+    "drone-4": {
+      "execution": {
+        "completed": true,
+        "final_disarmed": true,
+        "final_home_distance_m": 0.0405984198374519,
+        "final_landed_state": 1,
+        "maximum_relative_altitude_m": 20.017,
+        "maximum_tracking_reserve_consumed_m": 0.6767573007504143,
+        "minimum_residual_physical_clearance_m": 0.7846819463385466,
+        "outside_safe_area_length_m": 0.0,
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 0.7846818291502028,
+        "return_min_distance_raw_no_go_2_m": 11.818496258258863,
+        "return_samples": 105,
+        "return_start_wire_sequence": 78,
+        "return_unsafe_points": 0,
+        "return_unsafe_segments": 0,
+        "samples": 1464,
+        "segments": 1463,
+        "tracking_error_m": {
+          "maximum": 0.793775478457337,
+          "median": 0.010309073378628388,
+          "p95": 0.47060174667023047,
+          "p99": 0.7058960074725089,
+          "samples_above_2m": 0
+        },
+        "tracking_samples": 1424,
+        "unsafe_points": 0,
+        "unsafe_segments": 0
+      },
+      "mission": {
+        "contains_rtl": false,
+        "land_at_home": true,
+        "semantic_item_count": 82,
+        "terminal_command": "MAV_CMD_NAV_LAND"
+      },
+      "passed": true,
+      "planned_route": {
+        "minimum_distance_to_physical_safe_boundary_m": 1.999999999843915,
+        "return_connector_algorithm": "visibility_graph_astar_v1",
+        "return_connector_length_m": 654.5235397046984,
+        "return_connector_span": [
+          77,
+          80
+        ],
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 1.9999999000161253,
+        "return_min_distance_raw_no_go_2_m": 11.999999899946491,
+        "segments": 80,
+        "unsafe_segments": 0,
+        "unsafe_waypoints": 0,
+        "waypoints": 81
+      }
+    },
+    "drone-5": {
+      "execution": {
+        "completed": true,
+        "final_disarmed": true,
+        "final_home_distance_m": 0.04857409218508674,
+        "final_landed_state": 1,
+        "maximum_relative_altitude_m": 20.017,
+        "maximum_tracking_reserve_consumed_m": 0.8090527981305469,
+        "minimum_residual_physical_clearance_m": 1.1909472017304925,
+        "outside_safe_area_length_m": 0.0,
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 13.233761648367071,
+        "return_min_distance_raw_no_go_2_m": 23.233761648302384,
+        "return_samples": 74,
+        "return_start_wire_sequence": 83,
+        "return_unsafe_points": 0,
+        "return_unsafe_segments": 0,
+        "samples": 1643,
+        "segments": 1642,
+        "tracking_error_m": {
+          "maximum": 0.842758013727422,
+          "median": 0.010222916679116682,
+          "p95": 0.4354655209258199,
+          "p99": 0.7445205845682151,
+          "samples_above_2m": 0
+        },
+        "tracking_samples": 1602,
+        "unsafe_points": 0,
+        "unsafe_segments": 0
+      },
+      "mission": {
+        "contains_rtl": false,
+        "land_at_home": true,
+        "semantic_item_count": 85,
+        "terminal_command": "MAV_CMD_NAV_LAND"
+      },
+      "passed": true,
+      "planned_route": {
+        "minimum_distance_to_physical_safe_boundary_m": 2.0000002653127193,
+        "return_connector_algorithm": "direct_segment_v1",
+        "return_connector_length_m": 348.163300239705,
+        "return_connector_span": [
+          82,
+          83
+        ],
+        "return_intersection_buffered_no_go_2_m": 0.0,
+        "return_intersection_raw_no_go_2_m": 0.0,
+        "return_min_distance_buffered_no_go_2_m": 13.176367523523695,
+        "return_min_distance_raw_no_go_2_m": 23.176367523459007,
+        "segments": 83,
+        "unsafe_segments": 0,
+        "unsafe_waypoints": 0,
+        "waypoints": 84
+      }
+    }
+  }
+}

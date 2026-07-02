@@ -20,10 +20,11 @@ from coverage_mission_pipeline import (
 
 def valid_payload() -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "adapter": {
             "frame_id": "map",
             "clearance_m": 5.0,
+            "tracking_margin_m": 2.0,
             "min_component_area_m2": 0.0,
             "coverage_gap_tolerance_m2": 0.0001,
             "coverage_gap_relative_tolerance": 1.0e-9,
@@ -68,7 +69,7 @@ def valid_payload() -> dict:
         "pipeline": {
             "allow_idle_vehicles": True,
             "route": {
-                "return_to_reference": False,
+                "return_to_reference": True,
                 "connector": {"max_visibility_nodes": 512},
             },
             "ardupilot": {
@@ -99,7 +100,7 @@ def mutate(path, value):
 
 class TestHappyPath:
     def test_schema_version_constant(self):
-        assert SWARM_MISSION_CONFIG_SCHEMA_VERSION == 1
+        assert SWARM_MISSION_CONFIG_SCHEMA_VERSION == 2
 
     def test_parse_returns_operational_config(self):
         assert isinstance(parse(), SwarmMissionOperationalConfig)
@@ -123,6 +124,7 @@ class TestHappyPath:
         config = parse().adapter
         assert config.frame_id == "map"
         assert config.clearance_m == 5.0
+        assert config.tracking_margin_m == 2.0
         assert config.min_component_area_m2 == 0.0
         assert config.coverage_gap_tolerance_m2 == 0.0001
         assert config.coverage_gap_relative_tolerance == 1.0e-9
@@ -142,7 +144,7 @@ class TestHappyPath:
 
     def test_route_policy_preserved(self):
         route = parse().pipeline.vehicle_route
-        assert route.return_to_reference is False
+        assert route.return_to_reference is True
         assert route.connector_config.max_visibility_nodes == 512
 
     def test_ardupilot_policy_preserved(self):
@@ -178,7 +180,7 @@ class TestHappyPath:
         assert parse().to_json().endswith("\n")
 
     def test_yaml_has_schema_first(self):
-        assert parse().to_yaml().splitlines()[0] == "schema_version: 1"
+        assert parse().to_yaml().splitlines()[0] == "schema_version: 2"
 
     def test_to_dict_uses_canonical_assignment_order(self):
         data = parse().to_dict()
@@ -210,7 +212,7 @@ def test_unknown_top_level_field():
         parse(payload)
 
 
-@pytest.mark.parametrize("version", [0, 2, -1])
+@pytest.mark.parametrize("version", [0, 1, 3, -1])
 def test_unsupported_schema_version(version):
     with pytest.raises(SwarmMissionConfigError, match="unsupported schema_version"):
         parse(mutate(["schema_version"], version))
@@ -227,6 +229,7 @@ def test_schema_version_must_be_integer(version):
     [
         "frame_id",
         "clearance_m",
+        "tracking_margin_m",
         "min_component_area_m2",
         "coverage_gap_tolerance_m2",
         "coverage_gap_relative_tolerance",
@@ -244,6 +247,14 @@ def test_unknown_adapter_field():
     payload = valid_payload()
     payload["adapter"]["unknown"] = 1
     with pytest.raises(SwarmMissionConfigError, match="unknown field"):
+        parse(payload)
+
+
+@pytest.mark.parametrize("value", [-1.0, float("nan"), True, "2"])
+def test_invalid_tracking_margin_rejected(value):
+    payload = valid_payload()
+    payload["adapter"]["tracking_margin_m"] = value
+    with pytest.raises(SwarmMissionConfigError, match="tracking_margin_m"):
         parse(payload)
 
 
@@ -421,10 +432,27 @@ def test_supported_non_landing_end_actions(end_action):
     assert parse(payload).pipeline.ardupilot.end_action == end_action
 
 
+def test_rtl_requires_return():
+    payload = valid_payload()
+    payload["pipeline"]["route"]["return_to_reference"] = False
+    payload["pipeline"]["ardupilot"]["end_action"] = END_ACTION_RTL
+
+    with pytest.raises(
+        SwarmMissionConfigError,
+        match="rtl requires",
+    ):
+        parse(payload)
+
+
 def test_land_at_reference_requires_return():
     payload = valid_payload()
+    payload["pipeline"]["route"]["return_to_reference"] = False
     payload["pipeline"]["ardupilot"]["end_action"] = END_ACTION_LAND_AT_REFERENCE
-    with pytest.raises(SwarmMissionConfigError, match="requires"):
+
+    with pytest.raises(
+        SwarmMissionConfigError,
+        match="land_at_reference requires",
+    ):
         parse(payload)
 
 
@@ -487,12 +515,12 @@ def test_write_and_read_round_trip(tmp_path: Path, suffix):
 
 def test_json_write_is_parseable_by_stdlib(tmp_path: Path):
     path = parse().write(tmp_path / "mission.json")
-    assert json.loads(path.read_text())["schema_version"] == 1
+    assert json.loads(path.read_text())["schema_version"] == 2
 
 
 def test_yaml_write_is_parseable_by_pyyaml(tmp_path: Path):
     path = parse().write(tmp_path / "mission.yaml")
-    assert yaml.safe_load(path.read_text())["schema_version"] == 1
+    assert yaml.safe_load(path.read_text())["schema_version"] == 2
 
 
 def test_write_creates_parent_directory(tmp_path: Path):

@@ -116,7 +116,7 @@ def _operational() -> SwarmMissionOperationalConfig:
     )
     pipeline = GenericMissionPipelineConfig(
         vehicle_route=VehicleRouteAssemblyConfig(
-            return_to_reference=False,
+            return_to_reference=True,
             connector_config=ConnectorPlannerConfig(max_visibility_nodes=512),
         ),
         ardupilot=ArduPilotMissionBuildConfig(),

@@ -1,0 +1,88 @@
+schema_version: 2
+adapter:
+  frame_id: map
+  clearance_m: 10.0
+  tracking_margin_m: 2.0
+  min_component_area_m2: 250.0
+  coverage_gap_tolerance_m2: 250.0
+  coverage_gap_relative_tolerance: 1.0e-09
+  partition_overlap_tolerance_m2: 1.0e-06
+assignments:
+- partition_id: 1
+  vehicle_id: drone-1
+- partition_id: 2
+  vehicle_id: drone-2
+- partition_id: 3
+  vehicle_id: drone-3
+- partition_id: 4
+  vehicle_id: drone-4
+- partition_id: 5
+  vehicle_id: drone-5
+vehicles:
+- vehicle_id: drone-1
+  reference:
+    type: home
+    longitude_deg: 77.4211727161
+    latitude_deg: 28.6133972178
+  coverage:
+    altitude_m: 20.0
+    lateral_footprint_m: 14.9553871794
+    lateral_overlap: 0.2
+    start_goal_boundary_clearance_m: 0.0
+    minimum_start_goal_separation_m: 0.0
+- vehicle_id: drone-2
+  reference:
+    type: home
+    longitude_deg: 77.4211727161
+    latitude_deg: 28.6133972178
+  coverage:
+    altitude_m: 20.0
+    lateral_footprint_m: 14.9553871794
+    lateral_overlap: 0.2
+    start_goal_boundary_clearance_m: 0.0
+    minimum_start_goal_separation_m: 0.0
+- vehicle_id: drone-3
+  reference:
+    type: home
+    longitude_deg: 77.4211727161
+    latitude_deg: 28.6133972178
+  coverage:
+    altitude_m: 20.0
+    lateral_footprint_m: 14.9553871794
+    lateral_overlap: 0.2
+    start_goal_boundary_clearance_m: 0.0
+    minimum_start_goal_separation_m: 0.0
+- vehicle_id: drone-4
+  reference:
+    type: home
+    longitude_deg: 77.4211727161
+    latitude_deg: 28.6133972178
+  coverage:
+    altitude_m: 20.0
+    lateral_footprint_m: 14.9553871794
+    lateral_overlap: 0.2
+    start_goal_boundary_clearance_m: 0.0
+    minimum_start_goal_separation_m: 0.0
+- vehicle_id: drone-5
+  reference:
+    type: home
+    longitude_deg: 77.4211727161
+    latitude_deg: 28.6133972178
+  coverage:
+    altitude_m: 20.0
+    lateral_footprint_m: 14.9553871794
+    lateral_overlap: 0.2
+    start_goal_boundary_clearance_m: 0.0
+    minimum_start_goal_separation_m: 0.0
+pipeline:
+  allow_idle_vehicles: false
+  route:
+    return_to_reference: true
+    connector:
+      max_visibility_nodes: 512
+  ardupilot:
+    end_action: land_at_reference
+    waypoint_hold_s: 0.0
+    include_takeoff: true
+    skip_initial_reference_waypoint: true
+    minimum_relative_altitude_m: 1.0

@@ -16,6 +16,7 @@ from coverage_mission_pipeline.ardupilot_mission import (
     MAV_CMD_NAV_RETURN_TO_LAUNCH,
     MAV_CMD_NAV_TAKEOFF,
     MAV_CMD_NAV_WAYPOINT,
+    MAV_FRAME_GLOBAL,
     MAV_FRAME_GLOBAL_RELATIVE_ALT,
     QGC_WPL_110_HEADER,
     ArduPilotMission,
@@ -148,6 +149,7 @@ def basic_mission() -> ArduPilotMission:
 
 
 def test_constants_match_mavlink_values() -> None:
+    assert MAV_FRAME_GLOBAL == 0
     assert MAV_FRAME_GLOBAL_RELATIVE_ALT == 3
     assert MAV_CMD_NAV_WAYPOINT == 16
     assert MAV_CMD_NAV_RETURN_TO_LAUNCH == 20
@@ -156,9 +158,10 @@ def test_constants_match_mavlink_values() -> None:
 
 
 def test_build_default_command_sequence() -> None:
-    mission = build_ardupilot_mission(route_record())
+    mission = build_ardupilot_mission(route_record(return_to_reference=True))
     assert [item.command for item in mission.items] == [
         MAV_CMD_NAV_TAKEOFF,
+        MAV_CMD_NAV_WAYPOINT,
         MAV_CMD_NAV_WAYPOINT,
         MAV_CMD_NAV_WAYPOINT,
         MAV_CMD_NAV_RETURN_TO_LAUNCH,
@@ -166,27 +169,27 @@ def test_build_default_command_sequence() -> None:
 
 
 def test_build_uses_home_relative_frame_for_every_item() -> None:
-    mission = build_ardupilot_mission(route_record())
+    mission = build_ardupilot_mission(route_record(return_to_reference=True))
     assert {item.frame for item in mission.items} == {MAV_FRAME_GLOBAL_RELATIVE_ALT}
     assert mission.altitude_reference == "home_relative"
 
 
 def test_build_sets_first_item_current_only() -> None:
-    mission = build_ardupilot_mission(route_record())
-    assert [item.current for item in mission.items] == [1, 0, 0, 0]
+    mission = build_ardupilot_mission(route_record(return_to_reference=True))
+    assert [item.current for item in mission.items] == [1, 0, 0, 0, 0]
 
 
 def test_build_sets_all_items_autocontinue() -> None:
-    assert all(item.autocontinue == 1 for item in build_ardupilot_mission(route_record()).items)
+    assert all(item.autocontinue == 1 for item in build_ardupilot_mission(route_record(return_to_reference=True)).items)
 
 
 def test_build_sequence_numbers_are_consecutive() -> None:
-    mission = build_ardupilot_mission(route_record())
+    mission = build_ardupilot_mission(route_record(return_to_reference=True))
     assert [item.seq for item in mission.items] == list(range(len(mission.items)))
 
 
 def test_build_takeoff_uses_reference_coordinates() -> None:
-    route = route_record()
+    route = route_record(return_to_reference=True)
     first = route.geographic_waypoints()[0]
     takeoff = build_ardupilot_mission(route).items[0]
     assert takeoff.latitude_deg == pytest.approx(first.latitude_deg)
@@ -195,7 +198,7 @@ def test_build_takeoff_uses_reference_coordinates() -> None:
 
 
 def test_build_skips_initial_reference_waypoint_by_default() -> None:
-    route = route_record()
+    route = route_record(return_to_reference=True)
     geographic = route.geographic_waypoints()
     mission = build_ardupilot_mission(route)
     waypoints = mission.waypoint_items
@@ -204,7 +207,7 @@ def test_build_skips_initial_reference_waypoint_by_default() -> None:
 
 
 def test_build_can_keep_initial_reference_waypoint() -> None:
-    route = route_record()
+    route = route_record(return_to_reference=True)
     mission = build_ardupilot_mission(
         route,
         config=ArduPilotMissionBuildConfig(skip_initial_reference_waypoint=False),
@@ -217,7 +220,7 @@ def test_build_can_keep_initial_reference_waypoint() -> None:
 
 def test_build_can_omit_takeoff() -> None:
     mission = build_ardupilot_mission(
-        route_record(),
+        route_record(return_to_reference=True),
         config=ArduPilotMissionBuildConfig(
             include_takeoff=False,
             skip_initial_reference_waypoint=False,
@@ -237,13 +240,23 @@ def test_build_none_end_action() -> None:
 
 
 def test_build_rtl_end_action() -> None:
-    mission = build_ardupilot_mission(route_record())
+    mission = build_ardupilot_mission(
+        route_record(return_to_reference=True)
+    )
     assert mission.end_action == END_ACTION_RTL
     rtl = mission.items[-1]
     assert rtl.command == MAV_CMD_NAV_RETURN_TO_LAUNCH
     assert rtl.latitude_deg == 0.0
     assert rtl.longitude_deg == 0.0
     assert rtl.altitude_m == 0.0
+
+
+def test_rtl_requires_return_route() -> None:
+    with pytest.raises(
+        ArduPilotMissionError,
+        match="return_to_reference",
+    ):
+        build_ardupilot_mission(route_record())
 
 
 def test_build_land_at_reference() -> None:
@@ -274,7 +287,7 @@ def test_land_at_reference_requires_return_route() -> None:
 
 def test_waypoint_hold_time_is_applied() -> None:
     mission = build_ardupilot_mission(
-        route_record(),
+        route_record(return_to_reference=True),
         config=ArduPilotMissionBuildConfig(waypoint_hold_s=2.5),
     )
     assert all(item.param1 == 2.5 for item in mission.waypoint_items)
@@ -303,7 +316,7 @@ def test_builder_rejects_altitude_below_default_minimum(altitude: float) -> None
 
 def test_builder_accepts_configured_lower_positive_minimum() -> None:
     mission = build_ardupilot_mission(
-        route_record(altitude=0.5),
+        route_record(return_to_reference=True, altitude=0.5),
         config=ArduPilotMissionBuildConfig(minimum_relative_altitude_m=0.1),
     )
     assert mission.items[0].altitude_m == pytest.approx(0.5)
@@ -563,6 +576,26 @@ def test_wpl_header_and_field_count() -> None:
     assert all(len(line.split()) == 12 for line in lines[1:])
 
 
+def test_wpl_prepends_synthetic_home_and_shifts_semantic_items() -> None:
+    mission = basic_mission()
+    lines = mission.to_qgc_wpl_110().splitlines()
+    assert len(lines) == len(mission.items) + 2
+
+    home = lines[1].split()
+    assert [int(home[index]) for index in range(4)] == [0, 1, 0, 16]
+    assert float(home[8]) == pytest.approx(30.0)
+    assert float(home[9]) == pytest.approx(76.0)
+    assert float(home[10]) == 0.0
+
+    takeoff = lines[2].split()
+    assert [int(takeoff[index]) for index in range(4)] == [1, 0, 3, 22]
+    assert float(takeoff[10]) == pytest.approx(30.0)
+
+    terminal = lines[-1].split()
+    assert int(terminal[0]) == len(mission.items)
+    assert int(terminal[3]) == MAV_CMD_NAV_RETURN_TO_LAUNCH
+
+
 def test_wpl_is_tab_separated() -> None:
     line = basic_mission().to_qgc_wpl_110().splitlines()[1]
     assert line.count("\t") == 11
@@ -574,6 +607,62 @@ def test_wpl_round_trip() -> None:
         mission.to_qgc_wpl_110(), vehicle_id="drone-1"
     )
     assert parsed == mission
+
+
+def test_wpl_parser_accepts_legacy_file_without_synthetic_home() -> None:
+    mission = basic_mission()
+    legacy = QGC_WPL_110_HEADER + "\n" + "\n".join(
+        item.to_wpl_line() for item in mission.items
+    ) + "\n"
+    assert ArduPilotMission.from_qgc_wpl_110(
+        legacy,
+        vehicle_id="drone-1",
+    ) == mission
+
+
+def test_wpl_parser_rejects_home_without_semantic_items() -> None:
+    home = basic_mission().to_qgc_wpl_110().splitlines()[1]
+    with pytest.raises(ArduPilotMissionError, match="no mission items"):
+        ArduPilotMission.from_qgc_wpl_110(
+            QGC_WPL_110_HEADER + "\n" + home + "\n",
+            vehicle_id="drone-1",
+        )
+
+
+def test_wpl_parser_rejects_nonzero_home_parameters() -> None:
+    lines = basic_mission().to_qgc_wpl_110().splitlines()
+    fields = lines[1].split()
+    fields[4] = "1"
+    lines[1] = "\t".join(fields)
+    with pytest.raises(ArduPilotMissionError, match="home row"):
+        ArduPilotMission.from_qgc_wpl_110(
+            "\n".join(lines) + "\n",
+            vehicle_id="drone-1",
+        )
+
+
+def test_wpl_parser_rejects_shifted_sequence_gap() -> None:
+    lines = basic_mission().to_qgc_wpl_110().splitlines()
+    fields = lines[3].split()
+    fields[0] = "99"
+    lines[3] = "\t".join(fields)
+    with pytest.raises(ArduPilotMissionError, match="sequence must be"):
+        ArduPilotMission.from_qgc_wpl_110(
+            "\n".join(lines) + "\n",
+            vehicle_id="drone-1",
+        )
+
+
+def test_wpl_parser_rejects_home_coordinate_mismatch() -> None:
+    lines = basic_mission().to_qgc_wpl_110().splitlines()
+    fields = lines[1].split()
+    fields[8] = "31.0"
+    lines[1] = "\t".join(fields)
+    with pytest.raises(ArduPilotMissionError, match="home coordinates"):
+        ArduPilotMission.from_qgc_wpl_110(
+            "\n".join(lines) + "\n",
+            vehicle_id="drone-1",
+        )
 
 
 def test_wpl_parser_ignores_comments_and_blank_lines() -> None:
@@ -633,8 +722,8 @@ def test_write_explicit_paths(tmp_path: Path) -> None:
 def test_batch_sorted_by_vehicle_id() -> None:
     missions = build_ardupilot_missions(
         (
-            route_record(vehicle_id="drone-2"),
-            route_record(vehicle_id="drone-1"),
+            route_record(return_to_reference=True, vehicle_id="drone-2"),
+            route_record(return_to_reference=True, vehicle_id="drone-1"),
         )
     )
     assert [mission.vehicle_id for mission in missions] == ["drone-1", "drone-2"]
@@ -652,7 +741,7 @@ def test_batch_rejects_duplicate_vehicle_ids() -> None:
 
 def test_batch_rejects_idle_instead_of_dropping_it() -> None:
     with pytest.raises(ArduPilotMissionError, match="no route"):
-        build_ardupilot_missions((route_record(), idle_record()))
+        build_ardupilot_missions((route_record(return_to_reference=True), idle_record()))
 
 
 def test_batch_rejects_wrong_item_type() -> None:
@@ -691,13 +780,18 @@ def test_single_waypoint_after_skip_is_preserved() -> None:
         ),
         waypoints=(CoverageWaypoint(0.0, 0.0, 30.0),),
     )
-    mission = build_ardupilot_mission(one)
+    mission = build_ardupilot_mission(
+        one,
+        config=ArduPilotMissionBuildConfig(
+            end_action=END_ACTION_NONE,
+        ),
+    )
     assert len(mission.waypoint_items) == 1
     assert mission.items[0].command == MAV_CMD_NAV_TAKEOFF
 
 
 def test_generated_geographic_points_match_route_conversion() -> None:
-    route = route_record()
+    route = route_record(return_to_reference=True)
     geographic = route.geographic_waypoints()
     mission = build_ardupilot_mission(route)
     assert [item.latitude_deg for item in mission.waypoint_items] == pytest.approx(
@@ -709,7 +803,7 @@ def test_generated_geographic_points_match_route_conversion() -> None:
 
 
 def test_export_does_not_modify_source_record() -> None:
-    route = route_record()
+    route = route_record(return_to_reference=True)
     before = route.to_json()
     build_ardupilot_mission(route)
     assert route.to_json() == before

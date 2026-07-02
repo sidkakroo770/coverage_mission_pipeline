@@ -460,10 +460,15 @@ def test_route_waypoint_outside_free_space_is_rejected(frame, simple_free_space)
         connect_ordered_route_records([route], simple_free_space)
 
 
-def test_route_segment_crossing_hole_is_rejected(frame, hole_free_space) -> None:
+def test_route_segment_crossing_hole_is_rebuilt(frame, hole_free_space) -> None:
     route = make_route(frame, "r-a", "c-a", [(2, 5, 10), (18, 5, 10)])
-    with pytest.raises(ConnectorPlanningError, match="segment 0"):
-        connect_ordered_route_records([route], hole_free_space)
+    result = connect_ordered_route_records([route], hole_free_space)
+    repaired = result.routes[0]
+    assert len(repaired.waypoints) > 2
+    for left, right in zip(repaired.waypoints, repaired.waypoints[1:]):
+        assert hole_free_space.covers(
+            LineString([(left.x_m, left.y_m), (right.x_m, right.y_m)])
+        )
 
 
 def test_route_altitude_mismatch_is_rejected(frame, simple_free_space) -> None:
@@ -572,3 +577,175 @@ def test_connected_sequence_rejects_wrong_connector_count(frame, simple_free_spa
             ),
             waypoints=route.waypoints,
         )
+
+
+def test_point32_waypoint_discrepancy_is_snapped_to_exact_free_space(
+    frame,
+    simple_free_space,
+) -> None:
+    route = make_route(
+        frame,
+        "r-point32",
+        "c-point32",
+        [(1.0, 1.0, 10.0), (20.0005, 1.0, 10.0)],
+    )
+    result = connect_ordered_route_records([route], simple_free_space)
+    repaired = result.routes[0]
+    assert repaired.waypoints[0] == route.waypoints[0]
+    assert repaired.waypoints[1].x_m == pytest.approx(20.0)
+    assert repaired.waypoints[1].y_m == pytest.approx(1.0)
+    assert simple_free_space.contains(
+        Point(repaired.waypoints[1].x_m, repaired.waypoints[1].y_m)
+    )
+    assert simple_free_space.covers(
+        LineString(
+            [
+                (point.x_m, point.y_m)
+                for point in repaired.waypoints
+            ]
+        )
+    )
+
+
+def test_point32_endpoint_is_normalised_before_unsafe_segment_repair(frame) -> None:
+    free_space = Polygon(
+        [(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)],
+        [[(8.0, 3.0), (12.0, 3.0), (12.0, 7.0), (8.0, 7.0)]],
+    )
+    route = make_route(
+        frame,
+        "r-point32-hole",
+        "c-point32-hole",
+        [(2.0, 5.0, 10.0), (20.000005, 5.0, 10.0)],
+    )
+
+    result = connect_ordered_route_records([route], free_space)
+    repaired = result.routes[0]
+
+    assert free_space.contains(
+        Point(repaired.waypoints[-1].x_m, repaired.waypoints[-1].y_m)
+    )
+    assert len(repaired.waypoints) > 2
+    for left, right in zip(repaired.waypoints, repaired.waypoints[1:]):
+        assert free_space.covers(
+            LineString([(left.x_m, left.y_m), (right.x_m, right.y_m)])
+        )
+
+
+def test_point32_waypoint_discrepancy_beyond_one_centimetre_is_rejected(
+    frame,
+    simple_free_space,
+) -> None:
+    route = make_route(
+        frame,
+        "r-too-far",
+        "c-too-far",
+        [(1.0, 1.0, 10.0), (20.02, 1.0, 10.0)],
+    )
+    with pytest.raises(ConnectorPlanningError, match="exceeding Point32"):
+        connect_ordered_route_records([route], simple_free_space)
+
+
+def test_point32_segment_discrepancy_is_rebuilt_inside_exact_geometry(frame) -> None:
+    free_space = Polygon(
+        [
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 10.0),
+            (5.1, 10.0),
+            (5.1, 9.995),
+            (4.9, 9.995),
+            (4.9, 10.0),
+            (0.0, 10.0),
+        ]
+    )
+    route = make_route(
+        frame,
+        "r-shallow-notch",
+        "c-shallow-notch",
+        [(4.0, 10.0, 10.0), (6.0, 10.0, 10.0)],
+    )
+    result = connect_ordered_route_records([route], free_space)
+    repaired = result.routes[0]
+    assert len(repaired.waypoints) == 4
+    assert repaired.waypoints[1:3] == (
+        CoverageWaypoint(4.9, 9.995, 10.0),
+        CoverageWaypoint(5.1, 9.995, 10.0),
+    )
+    for left, right in zip(repaired.waypoints, repaired.waypoints[1:]):
+        assert free_space.covers(
+            LineString([(left.x_m, left.y_m), (right.x_m, right.y_m)])
+        )
+
+
+def test_material_route_segment_departure_is_rebuilt_with_astar(frame) -> None:
+    free_space = Polygon(
+        [
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 10.0),
+            (5.1, 10.0),
+            (5.1, 9.98),
+            (4.9, 9.98),
+            (4.9, 10.0),
+            (0.0, 10.0),
+        ]
+    )
+    route = make_route(
+        frame,
+        "r-deep-notch",
+        "c-deep-notch",
+        [(4.0, 10.0, 10.0), (6.0, 10.0, 10.0)],
+    )
+    result = connect_ordered_route_records([route], free_space)
+    repaired = result.routes[0]
+    assert repaired.waypoints[1:3] == (
+        CoverageWaypoint(4.9, 9.98, 10.0),
+        CoverageWaypoint(5.1, 9.98, 10.0),
+    )
+    for left, right in zip(repaired.waypoints, repaired.waypoints[1:]):
+        assert free_space.covers(
+            LineString([(left.x_m, left.y_m), (right.x_m, right.y_m)])
+        )
+
+
+def test_unsafe_route_segment_across_large_hole_is_rebuilt(frame) -> None:
+    free_space = Polygon(
+        [(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)],
+        [[(8.0, 3.0), (12.0, 3.0), (12.0, 7.0), (8.0, 7.0)]],
+    )
+    route = make_route(
+        frame,
+        "r-hole-crossing",
+        "c-hole-crossing",
+        [(2.0, 5.0, 10.0), (18.0, 5.0, 10.0)],
+    )
+    result = connect_ordered_route_records([route], free_space)
+    repaired = result.routes[0]
+    assert tuple((point.x_m, point.y_m) for point in repaired.waypoints) == (
+        (2.0, 5.0),
+        (8.0, 3.0),
+        (12.0, 3.0),
+        (18.0, 5.0),
+    )
+    for left, right in zip(repaired.waypoints, repaired.waypoints[1:]):
+        assert free_space.covers(
+            LineString([(left.x_m, left.y_m), (right.x_m, right.y_m)])
+        )
+
+
+def test_unsafe_route_segment_between_disconnected_parts_is_rejected(frame) -> None:
+    free_space = MultiPolygon(
+        [
+            Polygon([(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)]),
+            Polygon([(6.0, 0.0), (10.0, 0.0), (10.0, 4.0), (6.0, 4.0)]),
+        ]
+    )
+    route = make_route(
+        frame,
+        "r-disconnected",
+        "c-disconnected",
+        [(2.0, 2.0, 10.0), (8.0, 2.0, 10.0)],
+    )
+    with pytest.raises(ConnectorPlanningError, match="different connected"):
+        connect_ordered_route_records([route], free_space)

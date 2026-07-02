@@ -427,8 +427,9 @@ def _validate_and_order_routes(
         )
 
     by_component = {route.component_id: route for route in values}
-    ordered = tuple(by_component[component_id] for component_id in expected)
-    for route in ordered:
+    ordered_input = tuple(by_component[component_id] for component_id in expected)
+    normalised: list[CoverageRouteRecord] = []
+    for route in ordered_input:
         if route.assigned_vehicle_id != plan.vehicle_id:
             raise VehicleRouteAssemblyError(
                 f"route {route.request_id!r} is not assigned to vehicle "
@@ -439,9 +440,10 @@ def _validate_and_order_routes(
                 f"route {route.request_id!r} frame does not match vehicle reference"
             )
         try:
-            # A one-route sequence performs full route/free-space and altitude
-            # validation without constructing an inter-route connector.
-            connect_ordered_route_records(
+            # A one-route sequence snaps only sub-centimetre Point32 waypoint
+            # discrepancies, then replaces any unsafe planner transition with an
+            # exact visibility-graph connector inside authoritative free space.
+            checked = connect_ordered_route_records(
                 (route,),
                 free_space,
                 config=connector_config,
@@ -450,6 +452,8 @@ def _validate_and_order_routes(
             raise VehicleRouteAssemblyError(
                 f"route {route.request_id!r} is invalid: {exc}"
             ) from exc
+        normalised.append(checked.routes[0])
+    ordered = tuple(normalised)
 
     if ordered:
         altitude = ordered[0].waypoints[0].z_m

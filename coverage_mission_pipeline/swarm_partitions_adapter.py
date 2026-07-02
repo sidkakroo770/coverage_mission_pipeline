@@ -38,7 +38,9 @@ from .generic_mission_pipeline import (
     run_generic_mission_pipeline,
 )
 from .mission_geometry_core import (
+    GeometryCoreError,
     clip_partition_to_safe_area,
+    create_operational_route_space,
     create_safe_area,
 )
 from .planning_request import LocalPoint2D
@@ -51,7 +53,7 @@ from .start_goal_policy import StartGoalPolicyConfig
 from .vehicle_component_ordering import VehicleReference
 
 
-SWARM_PARTITIONS_ADAPTER_ALGORITHM = "swarm_partitions_json_adapter_v1"
+SWARM_PARTITIONS_ADAPTER_ALGORITHM = "swarm_partitions_json_adapter_v2"
 _COORDINATE_CRS = "EPSG:4326"
 _AXIS_ORDER = ("longitude", "latitude")
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -340,6 +342,7 @@ class SwarmPartitionsAdapterConfig:
     assignments: tuple[SwarmPartitionAssignment, ...]
     vehicles: tuple[SwarmVehicleMissionProfile, ...]
     clearance_m: float = 0.0
+    tracking_margin_m: float = 0.0
     min_component_area_m2: float = 0.0
     coverage_gap_tolerance_m2: float = 1.0e-4
     coverage_gap_relative_tolerance: float = 1.0e-9
@@ -387,6 +390,7 @@ class SwarmPartitionsAdapterConfig:
         object.__setattr__(self, "frame_id", self.frame_id.strip())
         for name in (
             "clearance_m",
+            "tracking_margin_m",
             "min_component_area_m2",
             "coverage_gap_tolerance_m2",
             "coverage_gap_relative_tolerance",
@@ -413,6 +417,9 @@ class SwarmPartitionsAdapterResult:
     partitions_projected_by_id: Mapping[int, BaseGeometry]
     safe_area_projected: BaseGeometry
     safe_area_local: BaseGeometry
+    route_space_projected: BaseGeometry
+    route_space_local: BaseGeometry
+    tracking_margin_m: float
     component_ids_by_partition_id: Mapping[int, tuple[str, ...]]
     dynamic_exclusion_count: int = 0
     algorithm: str = SWARM_PARTITIONS_ADAPTER_ALGORITHM
@@ -438,10 +445,37 @@ class SwarmPartitionsAdapterResult:
             raise SwarmPartitionsAdapterError(
                 "dynamic_exclusion_count must be a non-negative integer"
             )
-        for name in ("boundary_projected", "safe_area_projected", "safe_area_local"):
+        for name in (
+            "boundary_projected",
+            "safe_area_projected",
+            "safe_area_local",
+            "route_space_projected",
+            "route_space_local",
+        ):
             value = getattr(self, name)
             if not isinstance(value, BaseGeometry) or value.is_empty or not value.is_valid:
-                raise SwarmPartitionsAdapterError(f"{name} must be valid non-empty geometry")
+                raise SwarmPartitionsAdapterError(
+                    f"{name} must be valid non-empty geometry"
+                )
+        object.__setattr__(
+            self,
+            "tracking_margin_m",
+            _finite_nonnegative(self.tracking_margin_m, "tracking_margin_m"),
+        )
+        if not self.safe_area_projected.buffer(
+            _NUMERICAL_GEOMETRY_TOLERANCE_M,
+            join_style=2,
+        ).covers(self.route_space_projected):
+            raise SwarmPartitionsAdapterError(
+                "route_space_projected must be covered by safe_area_projected"
+            )
+        if not self.safe_area_local.buffer(
+            _NUMERICAL_GEOMETRY_TOLERANCE_M,
+            join_style=2,
+        ).covers(self.route_space_local):
+            raise SwarmPartitionsAdapterError(
+                "route_space_local must be covered by safe_area_local"
+            )
         object.__setattr__(self, "exclusions_projected", tuple(self.exclusions_projected))
         object.__setattr__(
             self,
@@ -482,6 +516,8 @@ class SwarmPartitionsAdapterResult:
                 for key, value in sorted(self.component_ids_by_partition_id.items())
             },
             "safe_area_m2": float(self.safe_area_projected.area),
+            "route_space_m2": float(self.route_space_projected.area),
+            "tracking_margin_m": self.tracking_margin_m,
             "frame": self.frame.to_dict(),
         }
 
@@ -753,11 +789,18 @@ def adapt_swarm_partitions_payload(
         dynamic_count,
     ) = _parse_payload_geometry(payload, config)
 
-    safe_area_projected = create_safe_area(
-        boundary_projected,
-        exclusions_projected,
-        config.clearance_m,
-    )
+    try:
+        safe_area_projected = create_safe_area(
+            boundary_projected,
+            exclusions_projected,
+            config.clearance_m,
+        )
+        route_space_projected = create_operational_route_space(
+            safe_area_projected,
+            config.tracking_margin_m,
+        )
+    except GeometryCoreError as exc:
+        raise SwarmPartitionsAdapterError(str(exc)) from exc
     minx, miny, _, _ = boundary_projected.bounds
     frame = LocalCartesianFrame(
         frame_id=config.frame_id,
@@ -766,6 +809,7 @@ def adapt_swarm_partitions_payload(
         origin_northing_m=float(miny),
     )
     safe_area_local = _translate_to_local(safe_area_projected, frame)
+    route_space_local = _translate_to_local(route_space_projected, frame)
 
     assignment_by_partition = {
         item.partition_id: item.vehicle_id for item in config.assignments
@@ -778,12 +822,13 @@ def adapt_swarm_partitions_payload(
     for partition_id in sorted(partitions_projected):
         projected_components = clip_partition_to_safe_area(
             partitions_projected[partition_id],
-            safe_area_projected,
+            route_space_projected,
             min_component_area_m2=config.min_component_area_m2,
         )
         if not projected_components:
             raise SwarmPartitionsAdapterError(
-                f"partition {partition_id} has no plannable component after clearance"
+                f"partition {partition_id} has no plannable component after "
+                "clearance and tracking margin"
             )
         clipped_projected_components.extend(projected_components)
         local_components = [
@@ -803,33 +848,51 @@ def adapt_swarm_partitions_payload(
         )
 
     # Projection round trips can leave nanometre-scale boundary slivers even
-    # after an exact intersection.  Unioning the translated clipped components
-    # back into the translated safe area preserves the authoritative geometry
-    # while making the strict downstream ``covers`` invariant numerically stable.
-    safe_area_local = unary_union([safe_area_local, *local_component_geometries]).buffer(
+    # after an exact intersection.  Normalize the operational route space with
+    # its clipped components, then normalize the authoritative safe area around
+    # that strict subset.  The configured tracking margin remains many orders of
+    # magnitude larger than this numerical tolerance.
+    route_space_local = unary_union(
+        [route_space_local, *local_component_geometries]
+    ).buffer(
         _NUMERICAL_GEOMETRY_TOLERANCE_M,
         join_style=2,
     )
+    if config.tracking_margin_m == 0.0:
+        safe_area_local = route_space_local
+    else:
+        safe_area_local = unary_union([safe_area_local, route_space_local]).buffer(
+            _NUMERICAL_GEOMETRY_TOLERANCE_M,
+            join_style=2,
+        )
+    if route_space_local.is_empty or not route_space_local.is_valid:
+        raise SwarmPartitionsAdapterError(
+            "local route-space normalization produced invalid geometry"
+        )
     if safe_area_local.is_empty or not safe_area_local.is_valid:
         raise SwarmPartitionsAdapterError(
             "local safe-area normalization produced invalid geometry"
         )
+    if not safe_area_local.covers(route_space_local):
+        raise SwarmPartitionsAdapterError(
+            "local route space is not covered by the authoritative safe area"
+        )
 
     covered = unary_union(clipped_projected_components)
-    missing_area = float(safe_area_projected.difference(covered).area)
-    extra_area = float(covered.difference(safe_area_projected).area)
+    missing_area = float(route_space_projected.difference(covered).area)
+    extra_area = float(covered.difference(route_space_projected).area)
     allowed_gap = max(
         config.coverage_gap_tolerance_m2,
-        config.coverage_gap_relative_tolerance * float(safe_area_projected.area),
+        config.coverage_gap_relative_tolerance * float(route_space_projected.area),
     )
     if missing_area > allowed_gap:
         raise SwarmPartitionsAdapterError(
-            "exported partitions do not cover the complete safe area: "
+            "exported partitions do not cover the complete operational route space: "
             f"missing {missing_area:.9f} m^2, allowed {allowed_gap:.9f} m^2"
         )
     if extra_area > allowed_gap:
         raise SwarmPartitionsAdapterError(
-            "clipped partition components extend beyond the safe area: "
+            "clipped partition components extend beyond the operational route space: "
             f"extra {extra_area:.9f} m^2"
         )
 
@@ -862,9 +925,10 @@ def adapt_swarm_partitions_payload(
             float(easting) - frame.origin_easting_m,
             float(northing) - frame.origin_northing_m,
         )
-        if not safe_area_local.covers(Point(local.x_m, local.y_m)):
+        if not route_space_local.covers(Point(local.x_m, local.y_m)):
             raise SwarmPartitionsAdapterError(
-                f"vehicle {profile.vehicle_id!r} reference is outside the safe area"
+                f"vehicle {profile.vehicle_id!r} reference is outside the "
+                "operational route space after applying tracking margin"
             )
         local_reference_by_vehicle[profile.vehicle_id] = local
         references.append(
@@ -907,7 +971,7 @@ def adapt_swarm_partitions_payload(
         vehicle_references=tuple(references),
         planning_specs=tuple(planning_specs),
         free_space_by_vehicle_id={
-            profile.vehicle_id: safe_area_local for profile in config.vehicles
+            profile.vehicle_id: route_space_local for profile in config.vehicles
         },
     )
     return SwarmPartitionsAdapterResult(
@@ -921,6 +985,9 @@ def adapt_swarm_partitions_payload(
         partitions_projected_by_id=partitions_projected,
         safe_area_projected=safe_area_projected,
         safe_area_local=safe_area_local,
+        route_space_projected=route_space_projected,
+        route_space_local=route_space_local,
+        tracking_margin_m=config.tracking_margin_m,
         component_ids_by_partition_id=component_ids_by_partition,
         dynamic_exclusion_count=dynamic_count,
     )

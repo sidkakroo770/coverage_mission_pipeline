@@ -20,6 +20,7 @@ import yaml
 
 from .ardupilot_mission import (
     END_ACTION_LAND_AT_REFERENCE,
+    END_ACTION_RTL,
     ArduPilotMissionBuildConfig,
     ArduPilotMissionError,
 )
@@ -37,7 +38,7 @@ from .vehicle_route_assembly import (
 )
 
 
-SWARM_MISSION_CONFIG_SCHEMA_VERSION = 1
+SWARM_MISSION_CONFIG_SCHEMA_VERSION = 2
 _SUPPORTED_SUFFIXES = frozenset({".json", ".yaml", ".yml"})
 
 
@@ -166,6 +167,7 @@ def _adapter_from_dict(
         {
             "frame_id",
             "clearance_m",
+            "tracking_margin_m",
             "min_component_area_m2",
             "coverage_gap_tolerance_m2",
             "coverage_gap_relative_tolerance",
@@ -202,6 +204,7 @@ def _adapter_from_dict(
             vehicles=vehicles,
             frame_id=adapter["frame_id"],
             clearance_m=adapter["clearance_m"],
+            tracking_margin_m=adapter["tracking_margin_m"],
             min_component_area_m2=adapter["min_component_area_m2"],
             coverage_gap_tolerance_m2=adapter["coverage_gap_tolerance_m2"],
             coverage_gap_relative_tolerance=adapter[
@@ -304,12 +307,19 @@ class SwarmMissionOperationalConfig:
                 "pipeline must be a GenericMissionPipelineConfig"
             )
 
+        terminal_action = self.pipeline.ardupilot.end_action
+
         if (
-            self.pipeline.ardupilot.end_action == END_ACTION_LAND_AT_REFERENCE
+            terminal_action
+            in {
+                END_ACTION_RTL,
+                END_ACTION_LAND_AT_REFERENCE,
+            }
             and not self.pipeline.vehicle_route.return_to_reference
         ):
             raise SwarmMissionConfigError(
-                "land_at_reference requires pipeline.route.return_to_reference=true"
+                f"{terminal_action} requires "
+                "pipeline.route.return_to_reference=true"
             )
 
         minimum = self.pipeline.ardupilot.minimum_relative_altitude_m
@@ -352,6 +362,7 @@ class SwarmMissionOperationalConfig:
             "adapter": {
                 "frame_id": self.adapter.frame_id,
                 "clearance_m": self.adapter.clearance_m,
+                "tracking_margin_m": self.adapter.tracking_margin_m,
                 "min_component_area_m2": self.adapter.min_component_area_m2,
                 "coverage_gap_tolerance_m2": (
                     self.adapter.coverage_gap_tolerance_m2

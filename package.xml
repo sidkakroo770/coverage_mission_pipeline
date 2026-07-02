@@ -3,7 +3,7 @@
            schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>coverage_mission_pipeline</name>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <description>
     Geometry preparation and mission orchestration for polygon coverage planning.
   </description>
@@ -11,7 +11,7 @@
   <maintainer email="sidkakroo770@users.noreply.github.com">
     sidkakroo770
   </maintainer>
-  <license>TODO</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
 
@@ -21,6 +21,7 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>polygon_coverage_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
 
   <test_depend>ament_pytest</test_depend>
   <test_depend>python3-pytest</test_depend>

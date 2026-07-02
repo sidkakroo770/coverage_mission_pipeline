@@ -207,6 +207,45 @@ def create_safe_area(
     return safe_area
 
 
+def create_operational_route_space(
+    safe_area: BaseGeometry,
+    tracking_margin_m: float,
+) -> BaseGeometry:
+    """Erode authoritative safe space by a controller-tracking reserve.
+
+    ``safe_area`` remains the physical flight-safety contract.  The returned
+    geometry is the stricter space used for planner components and route
+    connectors so that finite controller tracking error can be absorbed without
+    consuming the configured physical clearance.  Every polygon component is
+    preserved; no largest-component fallback is applied.
+    """
+    _validate_polygonal(safe_area, "safe_area")
+    margin = _validate_clearance(tracking_margin_m)
+    if margin == 0.0:
+        return safe_area
+
+    route_space = safe_area.buffer(
+        -margin,
+        resolution=16,
+        join_style=2,
+        mitre_limit=5.0,
+    )
+    if route_space.is_empty:
+        raise GeometryCoreError(
+            "no operational route space remains after applying tracking margin"
+        )
+    if not route_space.is_valid:
+        raise GeometryCoreError(
+            "operational route space is invalid after tracking-margin buffering: "
+            f"{explain_validity(route_space)}"
+        )
+    if not extract_polygon_components(route_space):
+        raise GeometryCoreError(
+            "tracking margin removed all polygonal operational route space"
+        )
+    return route_space
+
+
 def clip_partition_to_safe_area(
     partition: BaseGeometry,
     safe_area: BaseGeometry,

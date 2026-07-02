@@ -9,6 +9,7 @@ from .ardupilot_mission import (
     MAV_CMD_NAV_RETURN_TO_LAUNCH,
     MAV_CMD_NAV_TAKEOFF,
     MAV_CMD_NAV_WAYPOINT,
+    MAV_FRAME_GLOBAL,
     MAV_FRAME_GLOBAL_RELATIVE_ALT,
     QGC_WPL_110_HEADER,
     ArduPilotMission,
@@ -46,6 +47,7 @@ from .generic_mission_pipeline import (
 from .mission_geometry_core import (
     GeometryCoreError,
     clip_partition_to_safe_area,
+    create_operational_route_space,
     create_safe_area,
     extract_polygon_components,
     prepare_partition_components,
@@ -70,6 +72,7 @@ from .prepared_component import (
 )
 from .route_connector import (
     DIRECT_CONNECTOR_ALGORITHM,
+    ROS_POINT32_ROUTE_REPAIR_TOLERANCE_M,
     TRIVIAL_CONNECTOR_ALGORITHM,
     VISIBILITY_ASTAR_ALGORITHM,
     ConnectedRouteSequence,
@@ -208,6 +211,7 @@ __all__ = [
     "MAV_CMD_NAV_RETURN_TO_LAUNCH",
     "MAV_CMD_NAV_TAKEOFF",
     "MAV_CMD_NAV_WAYPOINT",
+    "MAV_FRAME_GLOBAL",
     "MAV_FRAME_GLOBAL_RELATIVE_ALT",
     "QGC_WPL_110_HEADER",
     "ArduPilotMission",
@@ -277,6 +281,7 @@ __all__ = [
     "FORWARD_ROUTE_DIRECTION",
     "CompleteVehicleRoute",
     "clip_partition_to_safe_area",
+    "create_operational_route_space",
     "connect_ordered_route_records",
     "create_safe_area",
     "extract_polygon_components",

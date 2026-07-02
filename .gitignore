@@ -7,3 +7,15 @@ log/
 .coverage
 htmlcov/
 .venv/
+
+# Local simulation and evidence
+mission_runs/
+*.BIN
+*.bin
+*.tlog
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
