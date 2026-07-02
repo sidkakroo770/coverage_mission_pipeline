@@ -1,0 +1,171 @@
+{
+  "all_completed": true,
+  "events_path": "/home/sid/coverage_ws/mission_runs/noida_stage21c/stage21c-fleet-events.jsonl",
+  "execution_policy": "staggered_shared_home_clearance",
+  "launch_clearance_altitude_m": 12.0,
+  "launch_clearance_home_distance_m": 30.0,
+  "schema_version": 1,
+  "separation": {
+    "overall_minimum": {
+      "horizontal_m_at_minimum": 24.39563372813257,
+      "minimum_3d_separation_m": 24.39563897497254,
+      "pair": "drone-1|drone-2",
+      "time_s": 701.9791468499989,
+      "vertical_m_at_minimum": 0.01600000000000179
+    },
+    "pairs": {
+      "drone-1|drone-2": {
+        "horizontal_m_at_minimum": 24.39563372813257,
+        "minimum_3d_separation_m": 24.39563897497254,
+        "time_s": 701.9791468499989,
+        "vertical_m_at_minimum": 0.01600000000000179
+      },
+      "drone-1|drone-3": {
+        "horizontal_m_at_minimum": 139.3725064211145,
+        "minimum_3d_separation_m": 139.37250677986532,
+        "time_s": 167.83608244899915,
+        "vertical_m_at_minimum": 0.010000000000001563
+      },
+      "drone-1|drone-4": {
+        "horizontal_m_at_minimum": 90.76971457598931,
+        "minimum_3d_separation_m": 90.76971459802309,
+        "time_s": 710.2199063869994,
+        "vertical_m_at_minimum": 0.0019999999999988916
+      },
+      "drone-1|drone-5": {
+        "horizontal_m_at_minimum": 154.7213609620663,
+        "minimum_3d_separation_m": 154.72136096529792,
+        "time_s": 673.6829196069993,
+        "vertical_m_at_minimum": 0.0010000000000012221
+      },
+      "drone-2|drone-3": {
+        "horizontal_m_at_minimum": 108.05571823777744,
+        "minimum_3d_separation_m": 109.33798360991457,
+        "time_s": 27.248765076999916,
+        "vertical_m_at_minimum": 16.695999999999998
+      },
+      "drone-2|drone-4": {
+        "horizontal_m_at_minimum": 99.2872155817929,
+        "minimum_3d_separation_m": 99.2872163069618,
+        "time_s": 572.4527106339992,
+        "vertical_m_at_minimum": 0.012000000000000455
+      },
+      "drone-2|drone-5": {
+        "horizontal_m_at_minimum": 347.4388089601726,
+        "minimum_3d_separation_m": 347.5100245988068,
+        "time_s": 826.6003201699987,
+        "vertical_m_at_minimum": 7.035
+      },
+      "drone-3|drone-4": {
+        "horizontal_m_at_minimum": 53.82461995029381,
+        "minimum_3d_separation_m": 53.824620702737576,
+        "time_s": 61.49916503299937,
+        "vertical_m_at_minimum": 0.009000000000000341
+      },
+      "drone-3|drone-5": {
+        "horizontal_m_at_minimum": 191.32994348798826,
+        "minimum_3d_separation_m": 191.3299442432281,
+        "time_s": 67.08935349300009,
+        "vertical_m_at_minimum": 0.01699999999999946
+      },
+      "drone-4|drone-5": {
+        "horizontal_m_at_minimum": 35.93670935043501,
+        "minimum_3d_separation_m": 35.93671248093853,
+        "time_s": 252.70939179800007,
+        "vertical_m_at_minimum": 0.015000000000000568
+      }
+    },
+    "warning_count": 0
+  },
+  "stage": "21C2",
+  "status": "PASSED",
+  "telemetry_path": "/home/sid/coverage_ws/mission_runs/noida_stage21c/stage21c-fleet-telemetry.csv",
+  "vehicle_count": 5,
+  "vehicles": [
+    {
+      "completed": true,
+      "completion_time_s": 917.0173019279991,
+      "endpoint": "tcp:127.0.0.1:5760",
+      "expected_final_sequence": 82,
+      "expected_wire_item_count": 83,
+      "final_armed": false,
+      "final_home_distance_m": 0.022467544033626705,
+      "final_landed_state": 1,
+      "highest_sequence": 82,
+      "launch_time_s": 1.5100484679987858,
+      "maximum_relative_altitude_m": 20.018,
+      "saw_airborne": true,
+      "saw_final_sequence": true,
+      "system_id": 1,
+      "vehicle_id": "drone-1"
+    },
+    {
+      "completed": true,
+      "completion_time_s": 839.1220447669984,
+      "endpoint": "tcp:127.0.0.1:5770",
+      "expected_final_sequence": 185,
+      "expected_wire_item_count": 186,
+      "final_armed": false,
+      "final_home_distance_m": 0.04493508738665389,
+      "final_landed_state": 1,
+      "highest_sequence": 185,
+      "launch_time_s": 13.01460692999899,
+      "maximum_relative_altitude_m": 20.015,
+      "saw_airborne": true,
+      "saw_final_sequence": true,
+      "system_id": 2,
+      "vehicle_id": "drone-2"
+    },
+    {
+      "completed": true,
+      "completion_time_s": 385.6522855160001,
+      "endpoint": "tcp:127.0.0.1:5780",
+      "expected_final_sequence": 55,
+      "expected_wire_item_count": 56,
+      "final_armed": false,
+      "final_home_distance_m": 0.029592581196665392,
+      "final_landed_state": 1,
+      "highest_sequence": 55,
+      "launch_time_s": 24.534249746999194,
+      "maximum_relative_altitude_m": 20.019,
+      "saw_airborne": true,
+      "saw_final_sequence": true,
+      "system_id": 3,
+      "vehicle_id": "drone-3"
+    },
+    {
+      "completed": true,
+      "completion_time_s": 782.7375006879993,
+      "endpoint": "tcp:127.0.0.1:5790",
+      "expected_final_sequence": 82,
+      "expected_wire_item_count": 83,
+      "final_armed": false,
+      "final_home_distance_m": 0.0405984198374519,
+      "final_landed_state": 1,
+      "highest_sequence": 82,
+      "launch_time_s": 39.53168735100007,
+      "maximum_relative_altitude_m": 20.017,
+      "saw_airborne": true,
+      "saw_final_sequence": true,
+      "system_id": 4,
+      "vehicle_id": "drone-4"
+    },
+    {
+      "completed": true,
+      "completion_time_s": 885.1315465179996,
+      "endpoint": "tcp:127.0.0.1:5800",
+      "expected_final_sequence": 85,
+      "expected_wire_item_count": 86,
+      "final_armed": false,
+      "final_home_distance_m": 0.04857409218508674,
+      "final_landed_state": 1,
+      "highest_sequence": 85,
+      "launch_time_s": 51.03264605599907,
+      "maximum_relative_altitude_m": 20.017,
+      "saw_airborne": true,
+      "saw_final_sequence": true,
+      "system_id": 5,
+      "vehicle_id": "drone-5"
+    }
+  ]
+}

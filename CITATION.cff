@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: "Safety-First Five-Drone Coverage Mission Pipeline"
+message: "If you use this software in research, please cite the repository."
+type: software
+authors:
+  - family-names: "Kakroo"
+    given-names: "Siddharth"
+repository-code: "https://github.com/sidkakroo770/coverage_mission_pipeline"
+url: "https://github.com/sidkakroo770/coverage_mission_pipeline"
+version: "0.2.0"
+date-released: "2026-07-02"
+license: "Apache-2.0"
+keywords:
+  - ROS 2
+  - ArduPilot
+  - UAV swarm
+  - coverage planning
+  - MAVLink
+  - SITL

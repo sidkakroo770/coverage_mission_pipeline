@@ -918,6 +918,33 @@ def build_ardupilot_mission(
         )
 
     if policy.end_action == END_ACTION_RTL:
+        if not route.return_to_reference:
+            raise ArduPilotMissionError(
+                "MAV_CMD_NAV_RETURN_TO_LAUNCH requires "
+                "route.return_to_reference=true"
+            )
+
+        final = geographic[-1]
+
+        if not (
+            math.isclose(
+                final.latitude_deg,
+                first.latitude_deg,
+                rel_tol=0.0,
+                abs_tol=_POSITION_TOLERANCE_DEG,
+            )
+            and math.isclose(
+                final.longitude_deg,
+                first.longitude_deg,
+                rel_tol=0.0,
+                abs_tol=_POSITION_TOLERANCE_DEG,
+            )
+        ):
+            raise ArduPilotMissionError(
+                "MAV_CMD_NAV_RETURN_TO_LAUNCH requires the "
+                "final route point at the reference"
+            )
+
         items.append(
             _item(
                 seq=len(items),

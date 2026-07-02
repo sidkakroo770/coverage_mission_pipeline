@@ -1,0 +1,38 @@
+schema_version: 2
+profile: sitl
+source_system: 250
+source_component: 190
+allow_duplicate_missions: false
+
+timeouts:
+  heartbeat_s: 15.0
+  ready_s: 120.0
+  ready_heartbeats: 3
+  startup_grace_s: 5.0
+  clear_ack_s: 10.0
+  item_request_s: 10.0
+  upload_ack_s: 15.0
+  download_item_s: 10.0
+  retries: 3
+
+vehicles:
+  - vehicle_id: drone-1
+    endpoint: tcp:127.0.0.1:5760
+    system_id: 1
+    component_id: 1
+  - vehicle_id: drone-2
+    endpoint: tcp:127.0.0.1:5770
+    system_id: 2
+    component_id: 1
+  - vehicle_id: drone-3
+    endpoint: tcp:127.0.0.1:5780
+    system_id: 3
+    component_id: 1
+  - vehicle_id: drone-4
+    endpoint: tcp:127.0.0.1:5790
+    system_id: 4
+    component_id: 1
+  - vehicle_id: drone-5
+    endpoint: tcp:127.0.0.1:5800
+    system_id: 5
+    component_id: 1

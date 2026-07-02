@@ -69,7 +69,7 @@ def valid_payload() -> dict:
         "pipeline": {
             "allow_idle_vehicles": True,
             "route": {
-                "return_to_reference": False,
+                "return_to_reference": True,
                 "connector": {"max_visibility_nodes": 512},
             },
             "ardupilot": {
@@ -144,7 +144,7 @@ class TestHappyPath:
 
     def test_route_policy_preserved(self):
         route = parse().pipeline.vehicle_route
-        assert route.return_to_reference is False
+        assert route.return_to_reference is True
         assert route.connector_config.max_visibility_nodes == 512
 
     def test_ardupilot_policy_preserved(self):
@@ -432,10 +432,27 @@ def test_supported_non_landing_end_actions(end_action):
     assert parse(payload).pipeline.ardupilot.end_action == end_action
 
 
+def test_rtl_requires_return():
+    payload = valid_payload()
+    payload["pipeline"]["route"]["return_to_reference"] = False
+    payload["pipeline"]["ardupilot"]["end_action"] = END_ACTION_RTL
+
+    with pytest.raises(
+        SwarmMissionConfigError,
+        match="rtl requires",
+    ):
+        parse(payload)
+
+
 def test_land_at_reference_requires_return():
     payload = valid_payload()
+    payload["pipeline"]["route"]["return_to_reference"] = False
     payload["pipeline"]["ardupilot"]["end_action"] = END_ACTION_LAND_AT_REFERENCE
-    with pytest.raises(SwarmMissionConfigError, match="requires"):
+
+    with pytest.raises(
+        SwarmMissionConfigError,
+        match="land_at_reference requires",
+    ):
         parse(payload)
 
 

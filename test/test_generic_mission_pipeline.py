@@ -30,7 +30,7 @@ from coverage_mission_pipeline.generic_mission_pipeline import (
     GenericMissionPipelineConfig,
     GenericMissionPipelineError,
     GenericMissionPipelineResult,
-    run_generic_mission_pipeline,
+    run_generic_mission_pipeline as _run_generic_mission_pipeline,
 )
 from coverage_mission_pipeline.planning_request import (
     CoveragePlanningRequest,
@@ -112,6 +112,45 @@ def frame() -> LocalCartesianFrame:
 @pytest.fixture
 def free_space() -> Polygon:
     return Polygon([(-20.0, -20.0), (100.0, -20.0), (100.0, 50.0), (-20.0, 50.0)])
+
+
+def _stage21_safe_test_pipeline_config(config=None):
+    # Return a test config satisfying the Stage 21 RTL safety invariant.
+    if config is None:
+        return GenericMissionPipelineConfig(
+            vehicle_route=VehicleRouteAssemblyConfig(
+                return_to_reference=True,
+            )
+        )
+
+    if (
+        isinstance(config, GenericMissionPipelineConfig)
+        and config.ardupilot.end_action == END_ACTION_RTL
+        and not config.vehicle_route.return_to_reference
+    ):
+        return replace(
+            config,
+            vehicle_route=replace(
+                config.vehicle_route,
+                return_to_reference=True,
+            ),
+        )
+
+    return config
+
+
+def run_generic_mission_pipeline(
+    definition,
+    planner_runner,
+    *,
+    config=None,
+):
+    # Invalid config objects pass through so validation tests remain meaningful.
+    return _run_generic_mission_pipeline(
+        definition,
+        planner_runner,
+        config=_stage21_safe_test_pipeline_config(config),
+    )
 
 
 def component(

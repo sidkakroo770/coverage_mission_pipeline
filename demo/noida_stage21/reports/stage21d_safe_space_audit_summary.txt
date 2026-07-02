@@ -1,0 +1,72 @@
+STAGE 21D — AUTHORITATIVE SAFE-SPACE CONTAINMENT AUDIT
+===========================================================
+
+STATUS: PASSED
+
+Evidence integrity
+------------------
+- ZIP manifest: 94 entries checked, 0 failures.
+- Production input hashes match: True.
+- Safe area: 566006.551338 m².
+- Route space: 557737.019550 m².
+- Physical clearance / tracking reserve: 10.0 / 2.0 m.
+
+Primary result
+--------------
+- All generated complete-route waypoints and segments are inside the authoritative route space.
+- All sampled flown points and straight segments between consecutive telemetry samples are inside the authoritative physical safe area.
+- Drone 2 and Drone 4 do not intersect raw No-Go 2 or its 10 m clearance buffer during the corrected return.
+- Every mission ends with explicit LAND at HOME; no mission contains RTL.
+
+Per-vehicle results
+-------------------
+drone-1: PASS
+  planned route: 81 points, 80 segments, unsafe=0/0
+  flown trajectory: 1804 points, 1803 segments, unsafe=0/0
+  tracking median/p95/p99/max: 0.011 / 0.403 / 0.683 / 0.919 m
+  residual physical clearance: 1.278 m
+  return distance from raw / buffered No-Go 2: 30.389 / 18.886 m
+  final HOME error: 0.022 m
+drone-2: PASS
+  planned route: 184 points, 183 segments, unsafe=0/0
+  flown trajectory: 1627 points, 1626 segments, unsafe=0/0
+  tracking median/p95/p99/max: 0.021 / 0.401 / 0.684 / 0.819 m
+  residual physical clearance: 0.626 m
+  return distance from raw / buffered No-Go 2: 12.449 / 0.670 m
+  final HOME error: 0.045 m
+drone-3: PASS
+  planned route: 54 points, 53 segments, unsafe=0/0
+  flown trajectory: 712 points, 711 segments, unsafe=0/0
+  tracking median/p95/p99/max: 0.020 / 0.527 / 0.728 / 0.791 m
+  residual physical clearance: 1.217 m
+  return distance from raw / buffered No-Go 2: 167.252 / 157.252 m
+  final HOME error: 0.030 m
+drone-4: PASS
+  planned route: 81 points, 80 segments, unsafe=0/0
+  flown trajectory: 1464 points, 1463 segments, unsafe=0/0
+  tracking median/p95/p99/max: 0.010 / 0.471 / 0.706 / 0.794 m
+  residual physical clearance: 0.785 m
+  return distance from raw / buffered No-Go 2: 11.818 / 0.785 m
+  final HOME error: 0.041 m
+drone-5: PASS
+  planned route: 84 points, 83 segments, unsafe=0/0
+  flown trajectory: 1643 points, 1642 segments, unsafe=0/0
+  tracking median/p95/p99/max: 0.010 / 0.435 / 0.745 / 0.843 m
+  residual physical clearance: 1.191 m
+  return distance from raw / buffered No-Go 2: 23.234 / 13.234 m
+  final HOME error: 0.049 m
+
+Fleet separation
+----------------
+- Conservative minimum observed 3D separation: 24.396 m.
+- Pair: drone-1|drone-2 at t=701.979 s.
+- Horizontal / vertical at minimum: 24.396 / 0.016 m.
+- Runtime separation warnings: 0.
+
+Conclusion
+----------
+Stage 21 resolves the Stage 20D safety defect. The generated visibility-graph return connectors kept Drone 2 and Drone 4 outside No-Go 2 and its clearance buffer, and all five drones landed at HOME.
+
+Sampling note
+-------------
+A detected crossing is conclusive. A non-detection is limited by the approximately 0.5 s telemetry sampling interval and straight interpolation between samples.

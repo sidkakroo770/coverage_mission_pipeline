@@ -8,12 +8,14 @@ from pyproj import Transformer
 from shapely.geometry import MultiPolygon, Polygon
 
 from coverage_mission_pipeline.generic_mission_pipeline import (
+    GenericMissionPipelineConfig,
     GenericMissionPipelineError,
 )
 from coverage_mission_pipeline.planning_result import (
     CoveragePlanningResult,
     CoverageWaypoint,
 )
+from coverage_mission_pipeline.vehicle_route_assembly import VehicleRouteAssemblyConfig
 from coverage_mission_pipeline.swarm_partitions_adapter import (
     SWARM_PARTITIONS_ADAPTER_ALGORITHM,
     SwarmPartitionAssignment,
@@ -23,7 +25,7 @@ from coverage_mission_pipeline.swarm_partitions_adapter import (
     SwarmVehicleMissionProfile,
     adapt_swarm_partitions_payload,
     load_swarm_partitions_json,
-    run_swarm_partitions_mission_pipeline,
+    run_swarm_partitions_mission_pipeline as _run_swarm_partitions_mission_pipeline,
 )
 
 
@@ -139,6 +141,34 @@ def _config(**overrides):
     )
     values.update(overrides)
     return SwarmPartitionsAdapterConfig(**values)
+
+
+def _stage21_safe_test_pipeline_config():
+    # Use geometric return before the adapter's default terminal RTL.
+    return GenericMissionPipelineConfig(
+        vehicle_route=VehicleRouteAssemblyConfig(
+            return_to_reference=True,
+        )
+    )
+
+
+def run_swarm_partitions_mission_pipeline(
+    source,
+    adapter_config,
+    planner_runner,
+    *,
+    pipeline_config=None,
+):
+    return _run_swarm_partitions_mission_pipeline(
+        source,
+        adapter_config,
+        planner_runner,
+        pipeline_config=(
+            pipeline_config
+            if pipeline_config is not None
+            else _stage21_safe_test_pipeline_config()
+        ),
+    )
 
 
 class FakePlanner:

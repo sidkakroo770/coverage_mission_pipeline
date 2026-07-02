@@ -20,6 +20,7 @@ import yaml
 
 from .ardupilot_mission import (
     END_ACTION_LAND_AT_REFERENCE,
+    END_ACTION_RTL,
     ArduPilotMissionBuildConfig,
     ArduPilotMissionError,
 )
@@ -306,12 +307,19 @@ class SwarmMissionOperationalConfig:
                 "pipeline must be a GenericMissionPipelineConfig"
             )
 
+        terminal_action = self.pipeline.ardupilot.end_action
+
         if (
-            self.pipeline.ardupilot.end_action == END_ACTION_LAND_AT_REFERENCE
+            terminal_action
+            in {
+                END_ACTION_RTL,
+                END_ACTION_LAND_AT_REFERENCE,
+            }
             and not self.pipeline.vehicle_route.return_to_reference
         ):
             raise SwarmMissionConfigError(
-                "land_at_reference requires pipeline.route.return_to_reference=true"
+                f"{terminal_action} requires "
+                "pipeline.route.return_to_reference=true"
             )
 
         minimum = self.pipeline.ardupilot.minimum_relative_altitude_m
