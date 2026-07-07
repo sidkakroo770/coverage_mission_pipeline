@@ -58,9 +58,16 @@ def write_input_overlay(
         '<Style id="exclusion"><LineStyle><color>ff0000ff</color><width>4</width></LineStyle><PolyStyle><color>550000ff</color></PolyStyle></Style>',
         '<Style id="home"><IconStyle><scale>1.3</scale></IconStyle></Style>',
     ]
-    for index, colour in enumerate(_PARTITION_COLOURS, start=1):
+    partition_ids = [
+        int(partition["id"])
+        for partition in mission_output["partitions"]
+    ]
+    for partition_id in partition_ids:
+        colour = _PARTITION_COLOURS[
+            (partition_id - 1) % len(_PARTITION_COLOURS)
+        ]
         parts.append(
-            f'<Style id="partition-{index}"><LineStyle><color>{colour}</color><width>3</width></LineStyle><PolyStyle><color>{colour}</color></PolyStyle></Style>'
+            f'<Style id="partition-{partition_id}"><LineStyle><color>{colour}</color><width>3</width></LineStyle><PolyStyle><color>{colour}</color></PolyStyle></Style>'
         )
 
     for index, record in enumerate(mission_output["boundary"], start=1):

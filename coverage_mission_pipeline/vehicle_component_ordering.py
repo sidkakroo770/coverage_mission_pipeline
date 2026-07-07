@@ -45,6 +45,7 @@ _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _REFERENCE_TYPES = frozenset({"home", "launch", "current_position", "custom"})
 _DISTANCE_ROUND_DIGITS = 12
 _OVERLAP_AREA_TOLERANCE_M2 = 1.0e-9
+_POINT_CONTAINMENT_TOLERANCE_M = 1.0e-7
 
 
 class VehicleOrderingError(ValueError):
@@ -92,6 +93,25 @@ def _finite_nonnegative(value: Any, path: str) -> float:
 
 def _frames_match(left: LocalCartesianFrame, right: LocalCartesianFrame) -> bool:
     return left == right
+
+
+def _covers_point_with_tolerance(geometry: Any, point: Point) -> bool:
+    """Accept only sub-micrometre GEOS boundary-classification noise.
+
+    ``nearest_points`` can return a coordinate intended to lie on a polygon
+    boundary that differs from that boundary by a few floating-point ulps.
+    Keep the strict containment check for real errors, but accept points no
+    farther than 0.1 micrometre from the authoritative component geometry.
+    """
+    try:
+        if geometry.covers(point):
+            return True
+        distance = float(geometry.distance(point))
+    except Exception as exc:
+        raise VehicleOrderingError(
+            "could not validate transition point containment"
+        ) from exc
+    return math.isfinite(distance) and distance <= _POINT_CONTAINMENT_TOLERANCE_M
 
 
 def _local_point_from_projected(
@@ -333,9 +353,11 @@ class ComponentVisit:
                 "straight_line_lower_bound_m does not match transition points"
             )
         object.__setattr__(self, "straight_line_lower_bound_m", distance)
-        if not self.component.polygon.covers(
-            Point(self.transition_end.x_m, self.transition_end.y_m)
-        ):
+        transition_end_point = Point(
+            self.transition_end.x_m,
+            self.transition_end.y_m,
+        )
+        if not _covers_point_with_tolerance(self.component.polygon, transition_end_point):
             raise VehicleOrderingError(
                 "transition_end must lie on or inside the visited component"
             )
@@ -419,7 +441,7 @@ class VehicleComponentPlan:
                     raise VehicleOrderingError(
                         "visit predecessor chain is inconsistent"
                     )
-                if not previous.component.polygon.covers(start_point):
+                if not _covers_point_with_tolerance(previous.component.polygon, start_point):
                     raise VehicleOrderingError(
                         "transition_start must lie on or inside the predecessor "
                         "component"

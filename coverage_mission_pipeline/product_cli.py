@@ -12,6 +12,16 @@ from .kml_product import build_kml_product_artifacts, write_kml_product_artifact
 from .map_overlay import write_input_overlay
 
 
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="coverage-swarm")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -19,6 +29,15 @@ def _parser() -> argparse.ArgumentParser:
     for command in ("validate", "prepare"):
         subparser = subparsers.add_parser(command)
         subparser.add_argument("kml", type=Path)
+        subparser.add_argument(
+            "--drones",
+            "--drone-count",
+            dest="drone_count",
+            type=_positive_int,
+            default=5,
+            metavar="N",
+            help="Number of drones/partitions to generate (default: 5).",
+        )
         subparser.add_argument("--clearance-m", type=float, default=10.0)
         subparser.add_argument("--tracking-margin-m", type=float, default=2.0)
         subparser.add_argument("--altitude-m", type=float, default=20.0)
@@ -86,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
             lateral_footprint_m=arguments.lateral_footprint_m,
             lateral_overlap=arguments.lateral_overlap,
             min_component_area_m2=arguments.min_component_area_m2,
+            drone_count=arguments.drone_count,
         )
         mission = artifacts.mission_input
         print("PASS: KML mission input is valid")
@@ -94,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Safe area: {mission.safe_area_projected.area:.3f} m^2")
         print(f"Route space: {mission.route_space_projected.area:.3f} m^2")
         print(f"No-go zones: {mission.exclusion_count}")
+        print(f"Drones: {arguments.drone_count}")
+        print(f"Tracking reserve: {arguments.tracking_margin_m:.3f} m")
         print(
             "HOME: "
             f"{mission.home_latitude_deg:.9f}, {mission.home_longitude_deg:.9f} "

@@ -347,3 +347,40 @@ def test_invalid_planning_parameters_still_fail_closed(component) -> None:
             lateral_footprint_m=0.0,
             lateral_overlap=0.1,
         )
+
+def test_nearest_projection_recovers_from_submicrometre_boundary_noise(
+    component,
+    monkeypatch,
+) -> None:
+    import coverage_mission_pipeline.start_goal_policy as policy_module
+
+    original_nearest_points = policy_module.nearest_points
+    call_count = 0
+
+    def noisy_nearest_points(source, target):
+        nonlocal call_count
+        source_point, target_point = original_nearest_points(source, target)
+        call_count += 1
+        if call_count == 1:
+            return (
+                source_point,
+                Point(float(target_point.x) - 1.0e-12, float(target_point.y)),
+            )
+        return source_point, target_point
+
+    monkeypatch.setattr(
+        policy_module,
+        "nearest_points",
+        noisy_nearest_points,
+    )
+
+    result = select_start_goal(
+        component,
+        start_anchor=LocalPoint2D(-5.0, 7.0),
+        goal_anchor=LocalPoint2D(10.0, 18.0),
+    )
+
+    selected = Point(result.start.x_m, result.start.y_m)
+    assert component.polygon.covers(selected)
+    assert 0.0 < result.start.x_m < 1.0e-6
+

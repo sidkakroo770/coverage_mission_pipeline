@@ -23,6 +23,9 @@ from .planning_request import CoveragePlanningRequest, LocalPoint2D
 from .prepared_component import PreparedComponent
 
 
+_POINT_CONTAINMENT_TOLERANCE_M = 1.0e-7
+
+
 class StartGoalPolicyError(ValueError):
     """Raised when start/goal policy inputs or results are unsafe."""
 
@@ -206,9 +209,49 @@ def _nearest_feasible_point(
         ),
     )
     selected = LocalPoint2D(x, y)
-    if not feasible.covers(Point(selected.x_m, selected.y_m)):
+    selected_geometry = Point(selected.x_m, selected.y_m)
+    if feasible.covers(selected_geometry):
+        return selected, distance
+
+    # GEOS can return a nearest point a few floating-point ulps outside the
+    # polygon it came from. Accept only sub-micrometre numerical noise, then
+    # move the selected point 0.1 micrometre into feasible space so downstream
+    # request validation remains strictly fail-closed.
+    projection_error_m = float(feasible.distance(selected_geometry))
+    if (
+        not math.isfinite(projection_error_m)
+        or projection_error_m > _POINT_CONTAINMENT_TOLERANCE_M
+    ):
         raise StartGoalPolicyError(
             "nearest-point projection did not produce a feasible point"
+        )
+
+    inset = feasible.buffer(
+        -_POINT_CONTAINMENT_TOLERANCE_M,
+        join_style=2,
+        mitre_limit=5.0,
+    )
+    inset_parts = _polygon_parts(inset)
+    if not inset_parts:
+        raise StartGoalPolicyError(
+            "could not move a numerically noisy projection into feasible space"
+        )
+    inset_geometry = (
+        inset_parts[0] if len(inset_parts) == 1 else unary_union(inset_parts)
+    )
+    _, nearest_inset = nearest_points(anchor_geometry, inset_geometry)
+    x = float(nearest_inset.x)
+    y = float(nearest_inset.y)
+    distance = math.hypot(x - anchor.x_m, y - anchor.y_m)
+    if not all(math.isfinite(value) for value in (x, y, distance)):
+        raise StartGoalPolicyError(
+            "inward projection produced non-finite coordinates"
+        )
+
+    selected = LocalPoint2D(x, y)
+    if not feasible.covers(Point(selected.x_m, selected.y_m)):
+        raise StartGoalPolicyError(
+            "inward projection did not produce a feasible point"
         )
     return selected, distance
 

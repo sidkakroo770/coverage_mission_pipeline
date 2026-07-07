@@ -145,17 +145,22 @@ def test_explicit_home_outside_route_space_is_rejected(tmp_path: Path) -> None:
         load_kml_mission_input(path)
 
 
-def test_build_artifacts_are_adapter_compatible(tmp_path: Path) -> None:
+def test_build_artifacts_are_adapter_compatible_for_variable_fleet(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "site.kml"
     path.write_text(site_kml(), encoding="utf-8")
 
     artifacts = build_kml_product_artifacts(
         path,
         min_component_area_m2=1.0,
+        drone_count=3,
     )
 
     assert artifacts.automatic_partitioning is not None
-    assert len(artifacts.mission_output["partitions"]) == 5
+    assert len(artifacts.mission_output["partitions"]) == 3
+    assert artifacts.mission_output["metadata"]["n_partitions"] == 3
+    assert artifacts.operational_config["adapter"]["tracking_margin_m"] == 2.0
     route_areas = artifacts.automatic_partitioning.route_area_by_partition_m2
     assert max(route_areas) - min(route_areas) < 1.0e-3
 
@@ -166,7 +171,7 @@ def test_build_artifacts_are_adapter_compatible(tmp_path: Path) -> None:
         artifacts.mission_output,
         config.adapter,
     )
-    assert len(result.component_ids_by_partition_id) == 5
+    assert len(result.component_ids_by_partition_id) == 3
 
     output = write_kml_product_artifacts(artifacts, tmp_path / "output")
     overlay = write_input_overlay(
@@ -174,6 +179,10 @@ def test_build_artifacts_are_adapter_compatible(tmp_path: Path) -> None:
         artifacts.operational_config,
         output / "map-input-overlay.kml",
     )
+    summary = json.loads(
+        (output / "input-summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["drone_count"] == 3
     assert (output / "mission_output.json").is_file()
     assert (output / "swarm_mission.yaml").is_file()
     assert overlay.is_file()
@@ -182,7 +191,11 @@ def test_build_artifacts_are_adapter_compatible(tmp_path: Path) -> None:
 def test_automatic_partitions_cover_boundary_without_area_overlap(tmp_path: Path) -> None:
     path = tmp_path / "site.kml"
     path.write_text(site_kml(), encoding="utf-8")
-    artifacts = build_kml_product_artifacts(path, min_component_area_m2=1.0)
+    artifacts = build_kml_product_artifacts(
+        path,
+        min_component_area_m2=1.0,
+        drone_count=3,
+    )
 
     records = artifacts.mission_output["partitions"]
     polygons = []
@@ -203,28 +216,75 @@ def test_automatic_partitions_cover_boundary_without_area_overlap(tmp_path: Path
             assert left.intersection(right).area < 1.0e-12
 
 
-def test_written_json_has_strict_five_partition_contract(tmp_path: Path) -> None:
+@pytest.mark.parametrize("drone_count", [1, 3, 5])
+def test_written_json_has_variable_partition_contract(
+    tmp_path: Path,
+    drone_count: int,
+) -> None:
     source = tmp_path / "site.kml"
     source.write_text(site_kml(), encoding="utf-8")
-    artifacts = build_kml_product_artifacts(source, min_component_area_m2=1.0)
-    output = write_kml_product_artifacts(artifacts, tmp_path / "out")
+    artifacts = build_kml_product_artifacts(
+        source,
+        min_component_area_m2=1.0,
+        drone_count=drone_count,
+    )
+    output = write_kml_product_artifacts(
+        artifacts,
+        tmp_path / f"out-{drone_count}",
+    )
 
-    payload = json.loads((output / "mission_output.json").read_text(encoding="utf-8"))
-    assert payload["metadata"]["n_partitions"] == 5
-    assert [item["id"] for item in payload["partitions"]] == [1, 2, 3, 4, 5]
-    assert payload["no_go_zones"]["predetermined"][0]["name"] == "NO_GO: building"
+    payload = json.loads(
+        (output / "mission_output.json").read_text(encoding="utf-8")
+    )
+    assert payload["metadata"]["n_partitions"] == drone_count
+    assert [item["id"] for item in payload["partitions"]] == list(
+        range(1, drone_count + 1)
+    )
+    assert len(artifacts.operational_config["assignments"]) == drone_count
+    assert len(artifacts.operational_config["vehicles"]) == drone_count
+    assert payload["no_go_zones"]["predetermined"][0]["name"] == (
+        "NO_GO: building"
+    )
 
-def test_generated_overlay_can_be_reimported(tmp_path: Path) -> None:
+
+def test_generated_overlay_supports_more_than_five_partitions(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "site.kml"
     source.write_text(site_kml(), encoding="utf-8")
-    artifacts = build_kml_product_artifacts(source, min_component_area_m2=1.0)
+    artifacts = build_kml_product_artifacts(
+        source,
+        min_component_area_m2=1.0,
+        drone_count=7,
+    )
     overlay = write_input_overlay(
         artifacts.mission_output,
         artifacts.operational_config,
         tmp_path / "overlay.kml",
     )
 
-    imported = load_kml_mission_input(overlay)
-    assert imported.supplied_partition_count == 5
+    overlay_text = overlay.read_text(encoding="utf-8")
+    assert 'id="partition-7"' in overlay_text
+    imported = load_kml_mission_input(
+        overlay,
+        expected_partition_count=7,
+    )
+    assert imported.supplied_partition_count == 7
     assert imported.exclusion_count == 1
     assert imported.home_was_explicit is True
+
+
+@pytest.mark.parametrize("drone_count", [0, -1, True])
+def test_invalid_drone_count_is_rejected(
+    tmp_path: Path,
+    drone_count: int,
+) -> None:
+    source = tmp_path / "site.kml"
+    source.write_text(site_kml(), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="positive integer"):
+        build_kml_product_artifacts(
+            source,
+            min_component_area_m2=1.0,
+            drone_count=drone_count,
+        )

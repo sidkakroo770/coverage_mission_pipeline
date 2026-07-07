@@ -1,17 +1,17 @@
-# Safety-First Five-Drone Coverage Mission Pipeline
+# Safety-First N-Drone Coverage Mission Pipeline
 
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble-22314E)](https://docs.ros.org/en/humble/)
 [![ArduPilot](https://img.shields.io/badge/ArduPilot-SITL-1D3557)](https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html)
 [![Python](https://img.shields.io/badge/Python-3.10-3776AB)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
 
-A ROS 2 mission-generation and deployment pipeline for **polygon coverage by a five-drone ArduPilot fleet**. It preserves disconnected geometry, creates flight-safe connectors around exclusions, exports independent Copter missions, verifies each upload by downloading it again, and executes a staggered shared-HOME simulation from one terminal.
+A ROS 2 mission-generation and deployment pipeline for **polygon coverage by a configurable ArduPilot fleet**. It preserves disconnected geometry, creates flight-safe connectors around exclusions, exports independent Copter missions, verifies each upload by downloading it again, and retains a reproducible five-drone shared-HOME SITL demonstration.
 
 ```bash
 coverage-swarm simulate-existing --execute --replace-running --hold-map
 ```
 
-> **Current scope:** the checked-in Noida Stage 21 scenario is a reproducible five-drone SITL demo. The KML/KMZ front end currently supports validation and preparation; arbitrary KML-to-flight integration remains under development.
+> **Current scope:** KML/KMZ validation and preparation accept a user-selected positive drone count. The checked-in Noida Stage 21 `simulate-existing` scenario remains an intentionally fixed, reproducible five-drone SITL demo. One-command arbitrary KML-to-flight execution remains under development.
 
 ## Why this project exists
 
@@ -19,7 +19,7 @@ Coverage sweeps are only part of a real mission. The fleet also needs safe trans
 
 ## Highlights
 
-- Five independent ArduPilot missions with explicit vehicle identity.
+- Configurable `N`-drone mission inputs with explicit vehicle identity.
 - Polygon/MultiPolygon preservation: connected components are never silently dropped.
 - Clearance applied to the global boundary and exclusions, not shared partition borders.
 - Deterministic polygon-vertex visibility-graph A* connectors.
@@ -54,7 +54,7 @@ flowchart LR
     D --> E[Georeferenced routes]
     E --> F[Vehicle ordering + orientation DP]
     F --> G[Visibility-graph connectors]
-    G --> H[Five complete routes]
+    G --> H[N complete routes]
     H --> I[ArduPilot export]
     I --> J[MAVLink upload/readback]
     J --> K[No-arming preflight]
@@ -111,12 +111,29 @@ coverage-swarm simulate-existing \
 ## Commands
 
 ```text
-coverage-swarm validate <file.kml|file.kmz>
-coverage-swarm prepare <file.kml|file.kmz> --output <new-directory>
+coverage-swarm validate <file.kml|file.kmz> --drones N
+coverage-swarm prepare <file.kml|file.kmz> --drones N --output <new-directory>
 coverage-swarm simulate-existing [--execute] [--replace-running]
 ```
 
-`validate` and `prepare` do not connect to or arm vehicles.
+For example:
+
+```bash
+coverage-swarm prepare mission.kml \
+  --drones 3 \
+  --output ~/coverage_ws/mission_runs/three_drone_mission
+```
+
+`--drone-count N` is accepted as an alias for `--drones N`. If the KML already contains
+`PARTITION_1` through `PARTITION_N`, their IDs must match the requested count exactly.
+Otherwise, the pipeline creates `N` deterministic equal-route-area partitions.
+
+The tracking reserve defaults to **2.0 m** through `--tracking-margin-m 2.0`.
+This is separate from `--clearance-m`, which defines physical centreline clearance
+from the mission boundary and exclusions.
+
+`validate` and `prepare` do not connect to or arm vehicles. `simulate-existing`
+continues to replay only the audited five-drone Stage 21 bundle.
 
 ## Tests
 
