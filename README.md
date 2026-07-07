@@ -29,6 +29,8 @@ Coverage sweeps are only part of a real mission. The fleet also needs safe trans
 - Staggered shared-HOME launch gate and live separation monitoring.
 - One-terminal SITL supervisor for five vehicles, routers, live KML map and cleanup.
 
+- One-terminal arbitrary-KML mission generation, verified upload, GPS/EKF readiness gating, AUTO execution, LAND and disarm for one ArduCopter SITL vehicle.
+
 ## Audited Stage 21 result
 
 | Result | Value |
@@ -108,6 +110,25 @@ coverage-swarm simulate-existing \
   --hold-map
 ```
 
+## One-drone arbitrary-KML SITL
+
+The validated one-drone supervisor accepts a valid KML with an explicit HOME,
+generates the N=1 boustrophedon route, starts ArduCopter SITL, performs
+transactional mission upload/readback, waits for GPS/EKF position readiness,
+arms normally, executes AUTO, and verifies LAND plus disarm.
+
+```bash
+cd ~/coverage_ws/src/coverage_mission_pipeline
+
+bash scripts/one_drone_sitl/coverage-one-drone-sitl.sh \
+  --replace-running \
+  ~/Downloads/CSED_mission.kml
+```
+
+The runner does not force arm and does not disable arming checks. See
+[`docs/ONE_DRONE_SITL_DIAGNOSIS.txt`](docs/ONE_DRONE_SITL_DIAGNOSIS.txt) for
+the complete failure analysis and the SITL-versus-real-aircraft boundary.
+
 ## Commands
 
 ```text
@@ -153,6 +174,7 @@ This is research software, not a certified flight-control system. The demo verif
 - [Safety model](docs/SAFETY.md)
 - [Validation evidence](docs/VALIDATION.md)
 - [Launch-post drafts](docs/LAUNCH_POSTS.md)
+- [One-drone SITL diagnosis and verified solution](docs/ONE_DRONE_SITL_DIAGNOSIS.txt)
 - [Contributing](CONTRIBUTING.md)
 
 ## License
