@@ -110,24 +110,22 @@ coverage-swarm simulate-existing \
   --hold-map
 ```
 
-## One-drone arbitrary-KML SITL
+## Arbitrary-N KML-to-SITL
 
-The validated one-drone supervisor accepts a valid KML with an explicit HOME,
-generates the N=1 boustrophedon route, starts ArduCopter SITL, performs
-transactional mission upload/readback, waits for GPS/EKF position readiness,
-arms normally, executes AUTO, and verifies LAND plus disarm.
+Generate, upload, verify, and execute any supported positive fleet size from
+one terminal:
 
 ```bash
-cd ~/coverage_ws/src/coverage_mission_pipeline
-
-bash scripts/one_drone_sitl/coverage-one-drone-sitl.sh \
-  --replace-running \
-  ~/Downloads/CSED_mission.kml
+coverage-swarm simulate mission.kml   --drones 3   --execute   --replace-running
 ```
 
-The runner does not force arm and does not disable arming checks. See
-[`docs/ONE_DRONE_SITL_DIAGNOSIS.txt`](docs/ONE_DRONE_SITL_DIAGNOSIS.txt) for
-the complete failure analysis and the SITL-versus-real-aircraft boundary.
+Omit `--execute` for a no-arming integration run. The supervisor creates one
+direct ArduCopter SITL instance per vehicle, assigns unique system IDs and TCP
+ports, verifies every mission by upload/readback fingerprint, applies GPS/EKF
+and normal pre-arm gates, launches from shared HOME with clearance staggering,
+and records pairwise airborne separation.
+
+See [`docs/VARIABLE_N_SITL.md`](docs/VARIABLE_N_SITL.md).
 
 ## Commands
 
@@ -174,6 +172,7 @@ This is research software, not a certified flight-control system. The demo verif
 - [Safety model](docs/SAFETY.md)
 - [Validation evidence](docs/VALIDATION.md)
 - [Launch-post drafts](docs/LAUNCH_POSTS.md)
+- [Arbitrary-N one-terminal SITL](docs/VARIABLE_N_SITL.md)
 - [One-drone SITL diagnosis and verified solution](docs/ONE_DRONE_SITL_DIAGNOSIS.txt)
 - [Contributing](CONTRIBUTING.md)
 

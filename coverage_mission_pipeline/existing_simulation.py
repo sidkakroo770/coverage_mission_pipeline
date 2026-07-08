@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -211,11 +210,31 @@ def _find_mavproxy() -> str:
 
 
 def _port_open(port: int) -> bool:
+    # Inspect the listening socket without becoming a MAVLink TCP client.
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+        completed = subprocess.run(
+            ("ss", "-H", "-ltn"),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ExistingSimulationError(
+            "could not inspect passive TCP listeners with 'ss -H -ltn'"
+        ) from exc
+
+    for line in completed.stdout.splitlines():
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        local_address = fields[3]
+        try:
+            observed = int(local_address.rsplit(":", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        if observed == port:
             return True
-    except OSError:
-        return False
+    return False
 
 
 def _wait_for_ports(ports: Sequence[int], timeout_s: float) -> None:
