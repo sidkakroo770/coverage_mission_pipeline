@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from typing import IO, Any, Mapping, Sequence
 
@@ -75,6 +76,7 @@ class ProcessSupervisor:
         cwd: Path,
         log_path: Path,
         env: Mapping[str, str] | None = None,
+        stdin: int | IO[Any] | None = subprocess.DEVNULL,
     ) -> subprocess.Popen[Any]:
         cwd.mkdir(parents=True, exist_ok=True)
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,7 +84,7 @@ class ProcessSupervisor:
         process = subprocess.Popen(
             list(command),
             cwd=str(cwd),
-            stdin=subprocess.DEVNULL,
+            stdin=stdin,
             stdout=handle,
             stderr=subprocess.STDOUT,
             text=True,
@@ -125,6 +127,11 @@ class ProcessSupervisor:
                     os.killpg(managed.process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+            if managed.process.stdin is not None:
+                try:
+                    managed.process.stdin.close()
+                except OSError:
+                    pass
             managed.log_handle.close()
 
 
@@ -136,6 +143,65 @@ def sitl_tcp_port(vehicle_number: int) -> int:
     ):
         raise ValueError("vehicle_number must be a positive integer")
     return 5760 + 10 * (vehicle_number - 1)
+
+
+def sitl_map_tcp_port(vehicle_number: int) -> int:
+    """Return a secondary SITL TCP telemetry port that does not steal SERIAL0."""
+
+    if (
+        isinstance(vehicle_number, bool)
+        or not isinstance(vehicle_number, int)
+        or vehicle_number < 1
+    ):
+        raise ValueError("vehicle_number must be a positive integer")
+    return 5762 + 10 * (vehicle_number - 1)
+
+
+def find_mavproxy() -> str:
+    for executable in ("mavproxy.py", "mavproxy"):
+        found = shutil.which(executable)
+        if found:
+            return found
+    raise VariableSimulationError(
+        "MAVProxy executable not found; install MAVProxy to use --map"
+    )
+
+
+def start_live_map(
+    supervisor: ProcessSupervisor,
+    *,
+    drone_count: int,
+    overlay_path: Path,
+    run_directory: Path,
+    logs: Path,
+) -> subprocess.Popen[Any]:
+    """Start a MAVProxy map on secondary SITL ports, leaving SERIAL0 free."""
+
+    mavproxy = find_mavproxy()
+    masters: list[str] = []
+    for index in range(1, drone_count + 1):
+        masters.append(f"--master=tcp:127.0.0.1:{sitl_map_tcp_port(index)}")
+
+    map_commands = (
+        "module load kmlread; "
+        f"kml load {overlay_path}; "
+        "map set showdirection 1"
+    )
+    return supervisor.start(
+        "live-map",
+        (
+            mavproxy,
+            *masters,
+            "--map",
+            "--console",
+            f"--aircraft=variable-n-live-map-{drone_count}",
+            f"--cmd={map_commands}",
+        ),
+        cwd=run_directory,
+        log_path=logs / "live-map.log",
+        # MAVProxy can exit when stdin is already EOF. Keep a private pipe open.
+        stdin=subprocess.PIPE,
+    )
 
 
 def _parse_listening_ports(output: str) -> set[int]:
@@ -501,6 +567,8 @@ def run_variable_simulation(
     min_component_area_m2: float,
     run_directory: Path | None = None,
     keep_run: bool = False,
+    show_map: bool = False,
+    hold_map: bool = False,
     fleet_options: FleetExecutionOptions | None = None,
 ) -> int:
     """Generate, upload, and optionally execute an arbitrary-N SITL mission."""
@@ -522,6 +590,10 @@ def run_variable_simulation(
         raise VariableSimulationError(
             "speedup must be finite and greater than zero"
         )
+    if hold_map and not show_map:
+        raise VariableSimulationError("--hold-map requires --map")
+    if show_map:
+        find_mavproxy()
 
     source_kml = Path(kml).expanduser().resolve()
     if not source_kml.is_file():
@@ -544,10 +616,15 @@ def run_variable_simulation(
             f"Copter defaults file missing: {copter_defaults}"
         )
 
-    required_ports = [
+    primary_ports = [
         sitl_tcp_port(index)
         for index in range(1, drone_count + 1)
     ]
+    map_ports = [
+        sitl_map_tcp_port(index)
+        for index in range(1, drone_count + 1)
+    ] if show_map else []
+    required_ports = [*primary_ports, *map_ports]
     if replace_running:
         print("[0/10] Stopping stale SITL/planner processes")
         replace_stale_processes()
@@ -598,13 +675,14 @@ def run_variable_simulation(
     supervisor = ProcessSupervisor()
     process_ids: dict[str, Any] = {}
     success = False
+    step_total = 11 if show_map else 10
 
     try:
         print(f"Run directory: {run_directory}")
         print(f"KML: {source_kml}")
         print(f"Drones: {drone_count}")
 
-        print("[1/10] Validating and preparing arbitrary-N KML mission")
+        print(f"[1/{step_total}] Validating and preparing arbitrary-N KML mission")
         artifacts = build_kml_product_artifacts(
             source_kml,
             clearance_m=clearance_m,
@@ -631,7 +709,7 @@ def run_variable_simulation(
             f"route_space={artifacts.mission_input.route_space_projected.area:.3f}m²"
         )
 
-        print("[2/10] Starting coverage planner")
+        print(f"[2/{step_total}] Starting coverage planner")
         planner = supervisor.start(
             "planner",
             (
@@ -647,7 +725,7 @@ def run_variable_simulation(
         wait_for_process_alive(planner, name="coverage planner")
         wait_for_service("/plan_coverage", 30.0)
 
-        print("[3/10] Generating N boustrophedon routes and missions")
+        print(f"[3/{step_total}] Generating N boustrophedon routes and missions")
         run_production_swarm_mission(
             prepared / "mission_output.json",
             prepared / "swarm_mission.yaml",
@@ -660,7 +738,7 @@ def run_variable_simulation(
             ),
         )
 
-        print("[4/10] Verifying every semantic mission")
+        print(f"[4/{step_total}] Verifying every semantic mission")
         summary = validate_mission_bundle(planned, drone_count)
         if not _same_e7(
             summary.home_latitude_deg,
@@ -678,7 +756,7 @@ def run_variable_simulation(
             f"{summary.home_longitude_deg:.9f}"
         )
 
-        print(f"[5/10] Starting {drone_count} direct ArduCopter SITL instance(s)")
+        print(f"[5/{step_total}] Starting {drone_count} direct ArduCopter SITL instance(s)")
         sitl_pids: list[int] = []
         home_spec = (
             f"{summary.home_latitude_deg:.9f},"
@@ -729,12 +807,35 @@ def run_variable_simulation(
                 )
         print(
             "PASS: SITL ports ready: "
-            + ", ".join(str(port) for port in required_ports)
+            + ", ".join(str(port) for port in primary_ports)
         )
+
+        if show_map:
+            print(f"[6/{step_total}] Starting live MAVProxy map")
+            live_map = start_live_map(
+                supervisor,
+                drone_count=drone_count,
+                overlay_path=prepared / "map-input-overlay.kml",
+                run_directory=run_directory,
+                logs=logs,
+            )
+            process_ids["live_map"] = live_map.pid
+            wait_for_process_alive(
+                live_map,
+                name="live MAVProxy map",
+                startup_s=3.0,
+            )
+            time.sleep(3.0)
+            if live_map.poll() is not None:
+                raise VariableSimulationError(
+                    "live MAVProxy map exited during startup:\n"
+                    + _tail_process_log(logs / "live-map.log")
+                )
+            print("PASS: live MAVProxy map opened with mission overlay")
 
         write_direct_fleet_config(fleet_config, drone_count)
 
-        print("[6/10] Uploading and readback-verifying every mission")
+        print(f"[{7 if show_map else 6}/{step_total}] Uploading and readback-verifying every mission")
         upload_status = upload_fleet_main(
             (
                 "--missions",
@@ -762,17 +863,19 @@ def run_variable_simulation(
         )
 
         if not execute:
-            print("[7/10] READY — no vehicle was armed")
+            print(f"[{8 if show_map else 7}/{step_total}] READY — no vehicle was armed")
             print("Add --execute to run the staggered fleet mission.")
             print(f"Reports and missions: {run_directory}")
             success = True
+            if show_map and hold_map and sys.stdin.isatty():
+                input("Press Enter to close the live map and SITL...")
             return 0
 
         # Allow every SERIAL0 upload connection to close before the fleet
         # executor opens its long-lived direct TCP clients.
         time.sleep(5.0)
 
-        print("[7/10] Executing staggered arbitrary-N AUTO fleet")
+        print(f"[{8 if show_map else 7}/{step_total}] Executing staggered arbitrary-N AUTO fleet")
         write_run_state(
             state_path,
             status="EXECUTING",
@@ -791,7 +894,7 @@ def run_variable_simulation(
             options=fleet_options,
         )
 
-        print("[8/10] Every mission completed")
+        print(f"[{9 if show_map else 8}/{step_total}] Every mission completed")
         write_run_state(
             state_path,
             status="PASSED",
@@ -800,10 +903,12 @@ def run_variable_simulation(
             execute=True,
             process_ids=process_ids,
         )
-        print("[9/10] Every vehicle landed and disarmed")
-        print("[10/10] PASS")
+        print(f"[{10 if show_map else 9}/{step_total}] Every vehicle landed and disarmed")
+        print(f"[{11 if show_map else 10}/{step_total}] PASS")
         print(f"Reports, missions, and logs: {run_directory}")
         success = True
+        if show_map and hold_map and sys.stdin.isatty():
+            input("Press Enter to close the live map and SITL...")
         return 0
 
     except KeyboardInterrupt:

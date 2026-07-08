@@ -207,3 +207,46 @@ overrides. It should retain:
 - telemetry freshness and failsafe handling.
 
 Perform propeller-off bench tests before any restrained or outdoor test.
+
+## Live map
+
+Use `--map` to open a live MAVProxy map during the arbitrary-N simulation:
+
+```zsh
+coverage-swarm simulate mission.kml \
+  --drones 5 \
+  --execute \
+  --replace-running \
+  --map
+```
+
+The map connects to the secondary SITL telemetry ports instead of SERIAL0.
+This keeps the direct TCP links for upload and execution free.
+
+| Vehicle | Upload/execution SERIAL0 | Live-map telemetry port |
+|---|---:|---:|
+| drone-1 | 5760 | 5762 |
+| drone-2 | 5770 | 5772 |
+| drone-3 | 5780 | 5782 |
+| drone-N | 5760 + 10 × (N-1) | 5762 + 10 × (N-1) |
+
+The map loads the generated overlay:
+
+```text
+prepared/map-input-overlay.kml
+```
+
+Use `--hold-map` with `--map` to keep the live map open after a successful run
+until Enter is pressed:
+
+```zsh
+coverage-swarm simulate mission.kml \
+  --drones 5 \
+  --execute \
+  --replace-running \
+  --map \
+  --hold-map
+```
+
+Use `--keep-run` when you want the SITL vehicles and map process to remain alive
+after success for manual inspection.

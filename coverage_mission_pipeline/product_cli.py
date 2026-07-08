@@ -112,6 +112,19 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Keep managed SITL/planner processes alive after success.",
     )
+    simulate.add_argument(
+        "--map",
+        action="store_true",
+        help=(
+            "Open a live MAVProxy map using secondary SITL telemetry ports. "
+            "This does not steal the direct mission upload/execution TCP links."
+        ),
+    )
+    simulate.add_argument(
+        "--hold-map",
+        action="store_true",
+        help="With --map, wait for Enter before closing the live map after success.",
+    )
     simulate.add_argument("--fleet-timeout-s", type=float, default=3600.0)
     simulate.add_argument(
         "--launch-gate-timeout-s",
@@ -235,6 +248,8 @@ def main(argv: list[str] | None = None) -> int:
                 min_component_area_m2=arguments.min_component_area_m2,
                 run_directory=arguments.run_directory,
                 keep_run=arguments.keep_run,
+                show_map=arguments.map,
+                hold_map=arguments.hold_map,
                 fleet_options=options,
             )
         except (RuntimeError, OSError, ValueError) as exc:

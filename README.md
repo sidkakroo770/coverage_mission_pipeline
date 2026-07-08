@@ -123,7 +123,7 @@ Omit `--execute` for a no-arming integration run. The supervisor creates one
 direct ArduCopter SITL instance per vehicle, assigns unique system IDs and TCP
 ports, verifies every mission by upload/readback fingerprint, applies GPS/EKF
 and normal pre-arm gates, launches from shared HOME with clearance staggering,
-and records pairwise airborne separation.
+and records pairwise airborne separation. Add `--map` to open a live MAVProxy map on secondary SITL telemetry ports without stealing the direct upload/execution links.
 
 See [`docs/VARIABLE_N_SITL.md`](docs/VARIABLE_N_SITL.md).
 

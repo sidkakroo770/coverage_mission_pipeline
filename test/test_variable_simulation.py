@@ -10,6 +10,7 @@ from coverage_mission_pipeline.product_cli import _parser
 from coverage_mission_pipeline.variable_simulation import (
     VariableSimulationError,
     _parse_listening_ports,
+    sitl_map_tcp_port,
     sitl_tcp_port,
     validate_mission_bundle,
     write_direct_fleet_config,
@@ -74,6 +75,14 @@ def test_sitl_tcp_port_scales_by_instance() -> None:
     assert sitl_tcp_port(8) == 5830
     with pytest.raises(ValueError):
         sitl_tcp_port(0)
+
+
+def test_sitl_map_tcp_port_uses_secondary_serial_port() -> None:
+    assert sitl_map_tcp_port(1) == 5762
+    assert sitl_map_tcp_port(2) == 5772
+    assert sitl_map_tcp_port(8) == 5832
+    with pytest.raises(ValueError):
+        sitl_map_tcp_port(0)
 
 
 def test_parse_listening_ports_is_passive() -> None:
@@ -142,3 +151,21 @@ def test_simulate_cli_accepts_drone_count() -> None:
     assert args.command == "simulate"
     assert args.drone_count == 7
     assert args.execute is True
+
+
+def test_simulate_cli_accepts_live_map_flags() -> None:
+    args = _parser().parse_args(
+        [
+            "simulate",
+            "mission.kml",
+            "--drones",
+            "5",
+            "--execute",
+            "--map",
+            "--hold-map",
+        ]
+    )
+    assert args.command == "simulate"
+    assert args.drone_count == 5
+    assert args.map is True
+    assert args.hold_map is True
