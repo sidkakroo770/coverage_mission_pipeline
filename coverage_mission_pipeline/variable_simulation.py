@@ -624,14 +624,21 @@ def run_variable_simulation(
         sitl_map_tcp_port(index)
         for index in range(1, drone_count + 1)
     ] if show_map else []
-    required_ports = [*primary_ports, *map_ports]
+
+    # ArduCopter creates SERIAL1/SERIAL2 listener sockets lazily: the secondary
+    # telemetry ports (5762, 5772, ...) appear only after a real client has
+    # connected to each primary SERIAL0 port (5760, 5770, ...). Therefore the
+    # startup gate must wait only for primary upload/execution ports. The map
+    # ports are checked again after verified upload has touched every vehicle.
+    startup_ports = list(primary_ports)
+    collision_check_ports = [*primary_ports, *map_ports]
     if replace_running:
         print("[0/10] Stopping stale SITL/planner processes")
         replace_stale_processes()
 
     occupied = sorted(
         port
-        for port in required_ports
+        for port in collision_check_ports
         if port in listening_tcp_ports()
     )
     if occupied:
@@ -675,7 +682,7 @@ def run_variable_simulation(
     supervisor = ProcessSupervisor()
     process_ids: dict[str, Any] = {}
     success = False
-    step_total = 11 if show_map else 10
+    step_total = 12 if show_map else 10
 
     try:
         print(f"Run directory: {run_directory}")
@@ -794,7 +801,7 @@ def run_variable_simulation(
                 name=f"ArduCopter {vehicle_id}",
             )
         process_ids["sitl"] = sitl_pids
-        wait_for_ports(required_ports, timeout_s=120.0)
+        wait_for_ports(startup_ports, timeout_s=120.0)
         for index, managed in enumerate(
             supervisor.processes[-drone_count:],
             start=1,
@@ -810,8 +817,35 @@ def run_variable_simulation(
             + ", ".join(str(port) for port in primary_ports)
         )
 
+        write_direct_fleet_config(fleet_config, drone_count)
+
+        print(f"[{6}/{step_total}] Uploading and readback-verifying every mission")
+        upload_status = upload_fleet_main(
+            (
+                "--missions",
+                str(planned),
+                "--fleet-config",
+                str(fleet_config),
+                "--report",
+                str(upload_report),
+            )
+        )
+        if upload_status != 0:
+            raise VariableSimulationError(
+                f"mission upload/readback failed with code {upload_status}"
+            )
+        verify_upload_report(upload_report, drone_count)
+        print(f"PASS: {drone_count} mission upload(s) verified")
+
         if show_map:
-            print(f"[6/{step_total}] Starting live MAVProxy map")
+            print(f"[7/{step_total}] Waiting for secondary live-map telemetry ports")
+            wait_for_ports(map_ports, timeout_s=60.0)
+            print(
+                "PASS: live-map telemetry ports ready: "
+                + ", ".join(str(port) for port in map_ports)
+            )
+
+            print(f"[8/{step_total}] Starting live MAVProxy map")
             live_map = start_live_map(
                 supervisor,
                 drone_count=drone_count,
@@ -833,26 +867,6 @@ def run_variable_simulation(
                 )
             print("PASS: live MAVProxy map opened with mission overlay")
 
-        write_direct_fleet_config(fleet_config, drone_count)
-
-        print(f"[{7 if show_map else 6}/{step_total}] Uploading and readback-verifying every mission")
-        upload_status = upload_fleet_main(
-            (
-                "--missions",
-                str(planned),
-                "--fleet-config",
-                str(fleet_config),
-                "--report",
-                str(upload_report),
-            )
-        )
-        if upload_status != 0:
-            raise VariableSimulationError(
-                f"mission upload/readback failed with code {upload_status}"
-            )
-        verify_upload_report(upload_report, drone_count)
-        print(f"PASS: {drone_count} mission upload(s) verified")
-
         write_run_state(
             state_path,
             status="READY",
@@ -863,7 +877,7 @@ def run_variable_simulation(
         )
 
         if not execute:
-            print(f"[{8 if show_map else 7}/{step_total}] READY — no vehicle was armed")
+            print(f"[{9 if show_map else 7}/{step_total}] READY — no vehicle was armed")
             print("Add --execute to run the staggered fleet mission.")
             print(f"Reports and missions: {run_directory}")
             success = True
@@ -875,7 +889,7 @@ def run_variable_simulation(
         # executor opens its long-lived direct TCP clients.
         time.sleep(5.0)
 
-        print(f"[{8 if show_map else 7}/{step_total}] Executing staggered arbitrary-N AUTO fleet")
+        print(f"[{9 if show_map else 7}/{step_total}] Executing staggered arbitrary-N AUTO fleet")
         write_run_state(
             state_path,
             status="EXECUTING",
@@ -894,7 +908,7 @@ def run_variable_simulation(
             options=fleet_options,
         )
 
-        print(f"[{9 if show_map else 8}/{step_total}] Every mission completed")
+        print(f"[{10 if show_map else 8}/{step_total}] Every mission completed")
         write_run_state(
             state_path,
             status="PASSED",
@@ -903,8 +917,8 @@ def run_variable_simulation(
             execute=True,
             process_ids=process_ids,
         )
-        print(f"[{10 if show_map else 9}/{step_total}] Every vehicle landed and disarmed")
-        print(f"[{11 if show_map else 10}/{step_total}] PASS")
+        print(f"[{11 if show_map else 9}/{step_total}] Every vehicle landed and disarmed")
+        print(f"[{12 if show_map else 10}/{step_total}] PASS")
         print(f"Reports, missions, and logs: {run_directory}")
         success = True
         if show_map and hold_map and sys.stdin.isatty():

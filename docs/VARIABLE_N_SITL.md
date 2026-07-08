@@ -250,3 +250,13 @@ coverage-swarm simulate mission.kml \
 
 Use `--keep-run` when you want the SITL vehicles and map process to remain alive
 after success for manual inspection.
+
+## Live map secondary-port startup note
+
+ArduCopter SITL opens its primary SERIAL0 TCP listener first (`5760`, `5770`,
+`5780`, ...). Secondary telemetry listeners such as `5762`, `5772`, `5782`, ...
+may appear only after the first MAVLink client has connected to each primary
+port. Therefore the arbitrary-N supervisor waits for primary ports, performs
+verified upload/readback, then waits for secondary live-map ports and starts the
+MAVProxy map before AUTO execution. This avoids a false startup failure while
+keeping upload/execution direct TCP links separate from map telemetry.
