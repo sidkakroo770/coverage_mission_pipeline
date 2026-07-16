@@ -22,14 +22,23 @@ Every final QGC WPL 110 file is normalized and verified as:
   rows 2+ coverage/connector waypoints
   final  MAV_CMD_NAV_LAND at HOME
 
+Coverage geometry is derived from three controls:
+
+  footprint       = 2 * altitude * tan(camera_fov / 2)
+  sweep spacing   = footprint * (1 - overlap)
+  boundary shrink = sweep spacing / 2
+
 Examples:
-  # Interactive inbox mode: place one KML/KMZ in ~/coverage_ws/kml_inbox
-  python3 generate_waypoints.py --drones 5 --altitude 20 \
+  # Interactive inbox mode using Camera Module 3 defaults:
+  # altitude 20 m, horizontal FOV 66 degrees, overlap 30.7060766%.
+  # These reproduce an 18 m sweep spacing and 9 m boundary shrink.
+  python3 generate_waypoints.py --drones 5 \
       --output-dir generated_waypoints
 
-  # Direct path mode remains available
-  python3 generate_waypoints.py mission.kml --drones 1 --altitude 2 \
-      --output drone-1.waypoints
+  # Direct path mode with custom camera geometry.
+  python3 generate_waypoints.py mission.kml --drones 3 \
+      --altitude 15 --camera-fov 66 --overlap-percent 30 \
+      --output-dir mission_waypoints
 """
 
 from __future__ import annotations
@@ -56,7 +65,16 @@ from shapely.geometry.polygon import orient
 from shapely.ops import transform
 
 
-SCRIPT_VERSION = "2026-07-12.3"
+SCRIPT_VERSION = "2026-07-16.2"
+
+# Raspberry Pi Camera Module 3, standard lens, used cross-track.
+DEFAULT_HORIZONTAL_FOV_DEG = 66.0
+
+# Preserves the previous 20 m setup exactly:
+# footprint = 25.9763037279 m
+# spacing   = 18.0 m
+# inset     = 9.0 m
+DEFAULT_OVERLAP_PERCENT = 30.70607662834378
 
 QGC_HEADER = "QGC WPL 110"
 
@@ -103,14 +121,71 @@ def nonnegative_float(value: str) -> float:
     return number
 
 
-def overlap_float(value: str) -> float:
+def overlap_percent_float(value: str) -> float:
     try:
         number = float(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError("must be a number") from exc
-    if not math.isfinite(number) or not 0.0 <= number < 1.0:
-        raise argparse.ArgumentTypeError("must be in the range [0, 1)")
+    if not math.isfinite(number) or not 0.0 <= number < 100.0:
+        raise argparse.ArgumentTypeError("must be in the range [0, 100)")
     return number
+
+
+def field_of_view_float(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a number") from exc
+    if not math.isfinite(number) or not 0.0 < number < 180.0:
+        raise argparse.ArgumentTypeError(
+            "must be finite and in the range (0, 180)"
+        )
+    return number
+
+
+def resolve_coverage_geometry(
+    *,
+    altitude_m: float,
+    camera_fov_deg: float,
+    overlap_percent: float,
+) -> tuple[float, float, float, float]:
+    """Derive footprint, overlap ratio, sweep spacing and partition inset.
+
+    The camera FOV is treated as the cross-track field of view. The derived
+    partition inset keeps the nearest nominal route on each side of a shared
+    boundary half one sweep spacing away, so two neighbouring routes remain one
+    full sweep spacing apart.
+    """
+    lateral_footprint_m = (
+        2.0
+        * altitude_m
+        * math.tan(math.radians(camera_fov_deg) / 2.0)
+    )
+    lateral_overlap = overlap_percent / 100.0
+    sweep_spacing_m = lateral_footprint_m * (1.0 - lateral_overlap)
+    partition_inset_m = sweep_spacing_m / 2.0
+
+    for name, value in (
+        ("camera footprint", lateral_footprint_m),
+        ("sweep spacing", sweep_spacing_m),
+        ("partition inset", partition_inset_m),
+    ):
+        if not math.isfinite(value) or value <= 0.0:
+            raise GenerationError(
+                f"Derived {name} must be finite and greater than zero"
+            )
+
+    if not 0.0 <= lateral_overlap < 1.0:
+        raise GenerationError(
+            "Resolved lateral overlap must be in the range [0, 1)"
+        )
+
+    return (
+        lateral_footprint_m,
+        lateral_overlap,
+        sweep_spacing_m,
+        partition_inset_m,
+    )
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -169,14 +244,17 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--altitude",
         type=positive_float,
-        default=2.0,
-        help="HOME-relative flight/takeoff altitude in metres (default: 2.0)",
+        default=20.0,
+        help="HOME-relative flight/takeoff altitude in metres (default: 20.0)",
     )
     parser.add_argument(
         "--clearance",
         type=nonnegative_float,
         default=1.0,
-        help="Boundary/exclusion clearance in metres (default: 1.0)",
+        help=(
+            "Physical outer-boundary and exclusion clearance in metres "
+            "(default: 1.0)"
+        ),
     )
     parser.add_argument(
         "--tracking-margin",
@@ -185,16 +263,25 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Additional operational tracking margin in metres (default: 0.5)",
     )
     parser.add_argument(
-        "--footprint",
-        type=positive_float,
-        default=2.0,
-        help="Lateral coverage footprint in metres (default: 2.0)",
+        "--camera-fov",
+        "--camera-horizontal-fov",
+        dest="camera_fov",
+        type=field_of_view_float,
+        default=DEFAULT_HORIZONTAL_FOV_DEG,
+        help=(
+            "Camera cross-track field of view in degrees "
+            f"(default: {DEFAULT_HORIZONTAL_FOV_DEG:.1f}, Camera Module 3)"
+        ),
     )
     parser.add_argument(
-        "--overlap",
-        type=overlap_float,
-        default=0.1,
-        help="Lateral overlap ratio (default: 0.1)",
+        "--overlap-percent",
+        type=overlap_percent_float,
+        default=DEFAULT_OVERLAP_PERCENT,
+        help=(
+            "Overlap between adjacent camera footprints as a percentage. "
+            "Sweep spacing and boundary shrink are derived automatically "
+            f"(default: {DEFAULT_OVERLAP_PERCENT:.9f}%%)"
+        ),
     )
     parser.add_argument(
         "--min-component-area",
@@ -225,7 +312,6 @@ def build_argument_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {SCRIPT_VERSION}",
     )
     return parser
-
 
 def _add_pipeline_to_python_path(workspace: Path) -> None:
     """Make the source or symlink-installed package importable without shell setup."""
@@ -349,6 +435,7 @@ def _build_operational_config(
     lateral_overlap: float,
     clearance_m: float,
     tracking_margin_m: float,
+    partition_inset_m: float,
     min_component_area_m2: float,
     max_visibility_nodes: int,
 ) -> dict[str, Any]:
@@ -387,6 +474,7 @@ def _build_operational_config(
             "frame_id": "map",
             "clearance_m": clearance_m,
             "tracking_margin_m": tracking_margin_m,
+            "partition_inset_m": partition_inset_m,
             "min_component_area_m2": min_component_area_m2,
             "coverage_gap_tolerance_m2": max(
                 min_component_area_m2,
@@ -423,9 +511,12 @@ def build_inputs(
     drone_count: int,
     clearance_m: float,
     tracking_margin_m: float,
+    partition_inset_m: float,
     altitude_m: float,
     lateral_footprint_m: float,
     lateral_overlap: float,
+    sweep_spacing_m: float,
+    horizontal_fov_deg: float,
     min_component_area_m2: float,
     max_visibility_nodes: int,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -535,6 +626,7 @@ def build_inputs(
         lateral_overlap=lateral_overlap,
         clearance_m=clearance_m,
         tracking_margin_m=tracking_margin_m,
+        partition_inset_m=partition_inset_m,
         min_component_area_m2=min_component_area_m2,
         max_visibility_nodes=max_visibility_nodes,
     )
@@ -556,6 +648,14 @@ def build_inputs(
         "source": str(mission.source_path),
         "drone_count": drone_count,
         "partition_mode": partition_mode,
+        "coverage_geometry": {
+            "partition_inset_m": partition_inset_m,
+            "sweep_spacing_m": sweep_spacing_m,
+            "lateral_footprint_m": lateral_footprint_m,
+            "lateral_overlap": lateral_overlap,
+            "overlap_percent": lateral_overlap * 100.0,
+            "camera_horizontal_fov_deg": horizontal_fov_deg,
+        },
         "planning_crs": mission.planning_crs,
         "home": {
             "longitude_deg": mission.home_longitude_deg,
@@ -1085,15 +1185,29 @@ def main() -> int:
 
     api = _load_pipeline_api(workspace)
 
+    (
+        lateral_footprint_m,
+        lateral_overlap,
+        sweep_spacing_m,
+        partition_inset_m,
+    ) = resolve_coverage_geometry(
+        altitude_m=args.altitude,
+        camera_fov_deg=args.camera_fov,
+        overlap_percent=args.overlap_percent,
+    )
+
     mission_output, config, summary = build_inputs(
         api=api,
         source=source,
         drone_count=args.drones,
         clearance_m=args.clearance,
         tracking_margin_m=args.tracking_margin,
+        partition_inset_m=partition_inset_m,
         altitude_m=args.altitude,
-        lateral_footprint_m=args.footprint,
-        lateral_overlap=args.overlap,
+        lateral_footprint_m=lateral_footprint_m,
+        lateral_overlap=lateral_overlap,
+        sweep_spacing_m=sweep_spacing_m,
+        horizontal_fov_deg=args.camera_fov,
         min_component_area_m2=args.min_component_area,
         max_visibility_nodes=args.max_visibility_nodes,
     )
@@ -1182,6 +1296,27 @@ def main() -> int:
     )
     print(
         f"Altitude: {args.altitude:.2f} m relative to HOME"
+    )
+    coverage_geometry = summary["coverage_geometry"]
+    print(
+        "Camera cross-track FOV: "
+        f"{coverage_geometry['camera_horizontal_fov_deg']:.3f} degrees"
+    )
+    print(
+        "Requested overlap: "
+        f"{coverage_geometry['overlap_percent']:.6f}%"
+    )
+    print(
+        "Derived camera footprint: "
+        f"{coverage_geometry['lateral_footprint_m']:.3f} m"
+    )
+    print(
+        "Derived parallel sweep spacing: "
+        f"{coverage_geometry['sweep_spacing_m']:.3f} m"
+    )
+    print(
+        "Derived boundary shrink / partition inset: "
+        f"{coverage_geometry['partition_inset_m']:.3f} m"
     )
     for index in range(1, args.drones + 1):
         rows, navigation_count = produced[index]
