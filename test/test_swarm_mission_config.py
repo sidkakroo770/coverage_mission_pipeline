@@ -25,6 +25,7 @@ def valid_payload() -> dict:
             "frame_id": "map",
             "clearance_m": 5.0,
             "tracking_margin_m": 2.0,
+            "partition_inset_m": 9.0,
             "min_component_area_m2": 0.0,
             "coverage_gap_tolerance_m2": 0.0001,
             "coverage_gap_relative_tolerance": 1.0e-9,
@@ -125,6 +126,7 @@ class TestHappyPath:
         assert config.frame_id == "map"
         assert config.clearance_m == 5.0
         assert config.tracking_margin_m == 2.0
+        assert config.partition_inset_m == 9.0
         assert config.min_component_area_m2 == 0.0
         assert config.coverage_gap_tolerance_m2 == 0.0001
         assert config.coverage_gap_relative_tolerance == 1.0e-9
@@ -248,6 +250,20 @@ def test_unknown_adapter_field():
     payload["adapter"]["unknown"] = 1
     with pytest.raises(SwarmMissionConfigError, match="unknown field"):
         parse(payload)
+
+
+@pytest.mark.parametrize("value", [-1.0, float("nan"), True, "2"])
+def test_invalid_partition_inset_rejected(value):
+    payload = valid_payload()
+    payload["adapter"]["partition_inset_m"] = value
+    with pytest.raises(SwarmMissionConfigError, match="partition_inset_m"):
+        parse(payload)
+
+
+def test_partition_inset_is_optional_for_existing_schema_v2_files():
+    payload = valid_payload()
+    del payload["adapter"]["partition_inset_m"]
+    assert parse(payload).adapter.partition_inset_m == 0.0
 
 
 @pytest.mark.parametrize("value", [-1.0, float("nan"), True, "2"])

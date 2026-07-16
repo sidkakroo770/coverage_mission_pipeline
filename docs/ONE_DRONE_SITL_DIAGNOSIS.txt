@@ -1,0 +1,491 @@
+ONE-DRONE ARBITRARY-KML SITL MISSION
+DIAGNOSIS, ROOT CAUSES, AND VERIFIED SOLUTION
+================================================
+
+Project
+-------
+Repository:
+  https://github.com/sidkakroo770/coverage_mission_pipeline
+
+Related planner:
+  https://github.com/sidkakroo770/polygon_coverage_ros2
+
+Validated environment
+---------------------
+- Ubuntu 22.04
+- ROS 2 Humble
+- Python 3.10
+- ArduPilot / ArduCopter SITL
+- ArduPilot source and build at: ~/ardupilot
+- ROS 2 workspace at: ~/coverage_ws
+- Tested KML: ~/Downloads/CSED_mission.kml
+- One vehicle: system ID 1, component ID 1
+- Direct MAVLink endpoint: tcp:127.0.0.1:5760
+
+Objective
+---------
+Run the complete one-drone coverage workflow from one terminal:
+
+1. Accept a valid KML containing:
+   - a mission boundary,
+   - optional exclusion/no-go zones,
+   - an explicit HOME location.
+2. Validate and prepare the geometry for one drone.
+3. Generate a boustrophedon coverage route.
+4. Export an ArduPilot mission.
+5. Start one ArduCopter SITL vehicle at the KML HOME.
+6. Upload the mission.
+7. Download it again and verify its fingerprint.
+8. Wait for flight-readiness conditions.
+9. Arm normally, enter AUTO, execute the mission, return to HOME, LAND,
+   and confirm disarm.
+10. Clean up all processes started by the launcher.
+
+Verified result
+---------------
+The final launcher completed the mission successfully after the following
+conditions were handled correctly:
+
+- valid N=1 KML geometry,
+- one generated semantic mission,
+- 26 semantic mission items,
+- 27 ArduPilot wire mission items,
+- correct HOME,
+- successful mission upload,
+- successful mission download/readback,
+- matching mission fingerprint,
+- GPS/EKF position readiness,
+- normal pre-arm checks,
+- valid low-throttle SITL RC input,
+- normal MAVLink arm command,
+- AUTO mission start,
+- terminal LAND and disarm.
+
+No force-arm command was used.
+Arming checks were not disabled.
+
+================================================
+FAILURE CHAIN AND ROOT-CAUSE DIAGNOSIS
+================================================
+
+1. ROS setup failed under Bash nounset
+--------------------------------------
+Observed error:
+
+  /opt/ros/humble/setup.bash: line 8:
+  AMENT_TRACE_SETUP_FILES: unbound variable
+
+Cause:
+The launcher enabled:
+
+  set -Eeuo pipefail
+
+before sourcing ROS 2 setup scripts. The "-u" option treats an unset shell
+variable as an error, while ROS setup scripts legitimately inspect variables
+that may not yet exist.
+
+Solution:
+Source ROS first without nounset, then enable nounset:
+
+  set -Eeo pipefail
+  source /opt/ros/humble/setup.bash
+  source "$HOME/coverage_ws/install/setup.bash"
+  set -u
+
+
+2. Repeated MAVLink heartbeat timeouts
+--------------------------------------
+Observed errors:
+
+  heartbeat timeout on 'udpin:127.0.0.1:14601'
+
+and later:
+
+  heartbeat timeout on 'tcp:127.0.0.1:5760'
+
+Initial architecture:
+
+  ArduCopter SITL TCP 5760
+        -> MAVProxy router
+        -> UDP 14601
+        -> uploader / executor
+
+Several separate problems made this unreliable.
+
+2A. The readiness probe consumed the TCP connection
+----------------------------------------------------
+The first launcher checked whether port 5760 was ready by actively opening a
+TCP connection and immediately closing it.
+
+For ArduCopter SITL SERIAL0, this was not a harmless health check. It became a
+real MAVLink client connection and interfered with the following MAVProxy or
+pymavlink client.
+
+Bad readiness check:
+
+  socket.create_connection(("127.0.0.1", 5760))
+
+Correct readiness check:
+Inspect the listening socket without connecting:
+
+  ss -H -ltn | awk '{print $4}' | grep -Eq '(^|:)5760$'
+
+Rule:
+Never test a point-to-point MAVLink TCP endpoint by opening and immediately
+closing it before the intended client connects.
+
+
+2B. MAVProxy was unnecessary for the one-drone sequential workflow
+-------------------------------------------------------------------
+For a single vehicle, the uploader and executor do not need simultaneous
+access. They can connect sequentially:
+
+  uploader -> close -> executor
+
+Final transport:
+
+  uploader:
+    tcp:127.0.0.1:5760
+
+  executor:
+    tcp:127.0.0.1:5760
+
+This removed an unnecessary router, UDP fan-out, and another source of
+heartbeat failure.
+
+
+3. Fleet configuration file was not created
+--------------------------------------------
+Observed error:
+
+  could not read fleet configuration:
+  No such file or directory: .../fleet_sitl_1.yaml
+
+Cause:
+While simplifying the MAVLink transport, the launcher accidentally removed the
+block that generated the run-local one-vehicle fleet YAML.
+
+Solution:
+Create the YAML before invoking upload_swarm_missions and verify that it exists:
+
+  cat >"$FLEET_CONFIG" <<'YAML'
+  schema_version: 2
+  profile: sitl
+  source_system: 250
+  source_component: 190
+  allow_duplicate_missions: false
+
+  timeouts:
+    heartbeat_s: 15.0
+    ready_s: 120.0
+    ready_heartbeats: 3
+    startup_grace_s: 5.0
+    clear_ack_s: 10.0
+    item_request_s: 10.0
+    upload_ack_s: 15.0
+    download_item_s: 10.0
+    retries: 3
+
+  vehicles:
+    - vehicle_id: drone-1
+      endpoint: tcp:127.0.0.1:5760
+      system_id: 1
+      component_id: 1
+  YAML
+
+  [[ -s "$FLEET_CONFIG" ]]
+
+
+4. sim_vehicle.py hid the useful ArduCopter output
+--------------------------------------------------
+The original launcher started ArduPilot through sim_vehicle.py. The launcher
+log contained only a wrapper line such as:
+
+  RiTW: Starting ArduCopter : .../arducopter ...
+
+The actual child startup output was not visible in the main SITL log. The
+generated command also contained a relative defaults path tied to the wrapper's
+working-directory layout.
+
+Solution:
+For this one-drone supervisor, launch the built ArduCopter binary directly:
+
+  ~/ardupilot/build/sitl/bin/arducopter
+
+with an absolute defaults file:
+
+  ~/ardupilot/Tools/autotest/default_params/copter.parm
+
+Representative direct launch:
+
+  "$ARDUCOPTER_BIN" \
+    -w \
+    --model + \
+    "--speedup=$SPEEDUP" \
+    --slave 0 \
+    --defaults "$COPTER_DEFAULTS" \
+    --sim-address=127.0.0.1 \
+    -I0 \
+    --home "$HOME_SPEC" \
+    --sysid 1
+
+Benefits:
+- real ArduCopter stdout/stderr is captured,
+- the defaults path is unambiguous,
+- child-process liveness can be checked directly,
+- startup failures become visible immediately.
+
+
+5. Mission upload succeeded, but arming returned MAV_RESULT_FAILED
+------------------------------------------------------------------
+Observed output:
+
+  VERIFIED fleet mission upload: 1 vehicle(s)
+  PASS: HOME ...
+  PASS: LOITER selected
+  FAILED: arming rejected with MAV_RESULT_FAILED (MAV_RESULT 4)
+
+This proved that:
+- KML parsing worked,
+- route planning worked,
+- mission generation worked,
+- SITL transport worked,
+- mission upload/readback worked,
+- HOME retrieval worked,
+- mode selection worked.
+
+The problem had moved from mission plumbing to ArduPilot's final arming checks.
+
+
+6. The generic pre-arm bit was not enough
+-----------------------------------------
+The runner initially waited for:
+
+  MAV_SYS_STATUS_PREARM_CHECK
+
+to be both enabled and healthy.
+
+That bit became healthy, but the arm command could still fail because
+ArduCopter runs additional final, mode-specific arm checks at the exact moment
+of arming.
+
+Important rule:
+"Pre-arm healthy" is necessary but is not sufficient for arming in a
+position-dependent mode such as LOITER.
+
+
+7. SITL had no valid low-throttle pilot input
+---------------------------------------------
+After direct ArduCopter launch, there was no MAVProxy virtual transmitter
+holding RC throttle low.
+
+ArduCopter's final arm check can reject arming in LOITER when pilot throttle
+implies a positive climb command.
+
+Solution:
+Before arming in SITL:
+
+1. Connect as the configured GCS system ID:
+     source system 255
+2. Send centered virtual sticks:
+     RC1 roll     = 1500 us
+     RC2 pitch    = 1500 us
+     RC3 throttle = 1000 us
+     RC4 yaw      = 1500 us
+3. Request RC_CHANNELS telemetry.
+4. Verify ArduPilot reports RC3 close to 1000 us.
+5. Arm normally.
+6. Enter AUTO and start the mission.
+7. Release the RC override.
+
+Why source system 255:
+ArduPilot only accepts RC_CHANNELS_OVERRIDE from the configured GCS identity.
+Using source system 250 for the execution runner did not guarantee acceptance.
+The final runner therefore uses source system 255.
+
+Safety:
+The override is only used to provide valid simulated pilot input. It is not a
+force-arm mechanism.
+
+
+8. Final blocker: "Need Position Estimate"
+------------------------------------------
+Observed status text:
+
+  Arm: Need Position Estimate
+  PreArm: Need Position Estimate
+
+Cause:
+LOITER requires a valid horizontal position estimate. ArduCopter's
+mode-specific position check requires its position_ok() condition.
+
+While disarmed, that means the EKF must provide at least one of:
+- absolute horizontal position, or
+- predicted absolute horizontal position.
+
+The generic pre-arm-health bit became green before this LOITER-specific
+position requirement was ready.
+
+Solution:
+Before selecting LOITER, wait explicitly for:
+
+1. GPS_RAW_INT fix_type >= 3, and
+2. EKF_STATUS_REPORT contains:
+   - EKF_POS_HORIZ_ABS, or
+   - EKF_PRED_POS_HORIZ_ABS,
+3. EKF is not:
+   - EKF_CONST_POS_MODE,
+   - EKF_UNINITIALIZED,
+4. The valid condition is observed in three consecutive EKF reports.
+
+During the wait, print diagnostics every five seconds:
+
+  GPS fix type
+  satellites visible
+  EPH/HDOP field
+  EKF flags
+  whether GLOBAL_POSITION_INT is present
+  consecutive stable samples
+
+This solved the final arming rejection.
+
+================================================
+FINAL VERIFIED EXECUTION ORDER
+================================================
+
+The working one-terminal sequence is:
+
+1. Source ROS 2 and workspace setup.
+2. Enable Bash nounset only after sourcing setup files.
+3. Stop stale planner/SITL processes when --replace-running is supplied.
+4. Start polygon_coverage_ros2 coverage_planner.
+5. Wait for /plan_coverage.
+6. Validate the KML with --drones 1.
+7. Prepare the one-drone mission input.
+8. Generate the coverage route and ArduPilot mission.
+9. Verify mission semantics:
+   - exactly one vehicle,
+   - first semantic item is TAKEOFF,
+   - final semantic item is LAND,
+   - no terminal RTL,
+   - terminal location matches HOME.
+10. Derive SITL HOME from the generated mission.
+11. Start the built ArduCopter SITL binary directly.
+12. Pass an absolute defaults-file path.
+13. Passively wait for TCP port 5760 to listen.
+14. Generate fleet_sitl_1.yaml.
+15. Upload the mission.
+16. Download/read it back.
+17. Verify count and mission fingerprint.
+18. Close the upload connection.
+19. Reconnect the execution runner directly to TCP 5760.
+20. Verify:
+    - system ID and component ID,
+    - disarmed state,
+    - wire mission item count,
+    - HOME.
+21. Configure telemetry intervals.
+22. Set mission current sequence to 1.
+23. Wait for GPS 3D fix and stable EKF absolute horizontal position.
+24. Select LOITER.
+25. Wait for the ArduPilot pre-arm-health bit.
+26. Send and verify centered low-throttle SITL RC input.
+27. Arm using the normal MAVLink arm command.
+28. Select AUTO.
+29. Send MISSION_START.
+30. Release the SITL RC override.
+31. Monitor:
+    - heartbeat freshness,
+    - position freshness,
+    - mission progression,
+    - airborne state,
+    - final mission item,
+    - LAND,
+    - disarm,
+    - distance from HOME.
+32. Stop all processes created by the launcher.
+
+================================================
+HOW TO RUN THE VERIFIED SOLUTION
+================================================
+
+From the repository checkout:
+
+  cd ~/coverage_ws/src/coverage_mission_pipeline
+
+  bash scripts/one_drone_sitl/coverage-one-drone-sitl.sh \
+    --replace-running \
+    ~/Downloads/CSED_mission.kml
+
+Expected major milestones:
+
+  PASS: KML mission input is valid
+  PASS production swarm mission
+  PASS: semantic mission verified
+  VERIFIED fleet mission upload
+  PASS: upload/readback report verified
+  PASS: GPS/EKF position estimate is stable
+  PASS: LOITER selected
+  PASS: ArduPilot pre-arm checks are healthy
+  PASS: ArduPilot received low throttle
+  PASS: vehicle armed
+  PASS: AUTO selected
+  PASS: mission start accepted
+  MISSION LAUNCHED
+  PASS: mission completed, landed, and disarmed
+
+================================================
+FILES ADDED TO THE REPOSITORY
+================================================
+
+  docs/ONE_DRONE_SITL_DIAGNOSIS.txt
+
+  scripts/one_drone_sitl/coverage-one-drone-sitl.sh
+
+  scripts/one_drone_sitl/run_one_drone_sitl.py
+
+The shell script is the one-terminal supervisor.
+The Python file is the fail-closed MAVLink execution and monitoring runner.
+
+================================================
+IMPORTANT SAFETY AND HARDWARE BOUNDARY
+================================================
+
+This result validates a one-drone SITL workflow. It does not by itself prove
+that the same system is safe for an actual aircraft.
+
+For the Raspberry Pi 5 + Pixhawk implementation:
+
+- replace the SITL TCP endpoint with the real Pixhawk serial or UDP endpoint,
+- do not launch the ArduCopter SITL binary,
+- do not assume a synthetic RC override is appropriate,
+- preserve upload/readback verification,
+- preserve GPS/EKF readiness checks,
+- preserve normal pre-arm checks,
+- preserve HOME validation,
+- preserve LAND and disarm monitoring,
+- confirm SYSID_MYGCS and source-system identities,
+- validate geofence, altitude, failsafe, RC, battery, and telemetry behavior,
+- perform propeller-off bench tests before restrained or outdoor tests,
+- never use force arm to hide an unresolved readiness failure.
+
+================================================
+SUMMARY
+================================================
+
+The original KML coverage pipeline was not the cause of the repeated failures.
+It successfully produced a safe one-drone route and a valid ArduPilot mission.
+
+The failures were integration issues at the boundaries between:
+
+- Bash and ROS setup,
+- TCP readiness checks and MAVLink,
+- sim_vehicle.py and the ArduCopter child process,
+- upload configuration generation,
+- periodic pre-arm health and final arm-time checks,
+- simulated RC input,
+- GPS/EKF readiness required by LOITER.
+
+The final solution works because each boundary now has an explicit,
+observable, fail-closed readiness condition rather than a blind sleep or an
+assumption.

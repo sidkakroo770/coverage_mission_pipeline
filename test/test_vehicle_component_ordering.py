@@ -229,6 +229,27 @@ def test_single_component_order(reference, frame) -> None:
     assert plan.visits[0].straight_line_lower_bound_m == pytest.approx(10.0)
 
 
+def test_component_visit_accepts_submicrometre_boundary_noise(frame) -> None:
+    item = component(frame, "component-a", 0.0, 0.0, 10.0, 10.0)
+    start = LocalPoint2D(20.0, 5.0)
+    end = LocalPoint2D(10.0 + 1.0e-12, 5.0)
+
+    visit = ComponentVisit(
+        visit_index=1,
+        component=item,
+        predecessor_component_id=None,
+        transition_start=start,
+        transition_end=end,
+        straight_line_lower_bound_m=math.hypot(
+            end.x_m - start.x_m,
+            end.y_m - start.y_m,
+        ),
+    )
+
+    assert visit.transition_end == end
+    assert item.polygon.distance(Point(end.x_m, end.y_m)) < 1.0e-7
+
+
 def test_first_component_is_nearest_to_vehicle_reference(reference, frame) -> None:
     far = component(frame, "far", 30.0, 0.0, 40.0, 10.0)
     near = component(frame, "near", 5.0, 0.0, 10.0, 10.0)

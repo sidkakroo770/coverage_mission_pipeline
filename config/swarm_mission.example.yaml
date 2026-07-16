@@ -3,6 +3,7 @@ adapter:
   frame_id: map
   clearance_m: 5.0
   tracking_margin_m: 2.0
+  partition_inset_m: 0.0
   min_component_area_m2: 0.0
   coverage_gap_tolerance_m2: 0.0001
   coverage_gap_relative_tolerance: 1.0e-9

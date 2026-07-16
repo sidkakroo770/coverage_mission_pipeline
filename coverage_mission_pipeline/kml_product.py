@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build strict Stage-21-compatible product inputs from KML/KMZ."""
+"""Build strict variable-fleet product inputs from KML/KMZ."""
 
 from __future__ import annotations
 
@@ -66,10 +66,11 @@ def _operational_config_dict(
     clearance_m: float,
     tracking_margin_m: float,
     min_component_area_m2: float,
+    drone_count: int,
 ) -> dict[str, Any]:
     vehicles = []
     assignments = []
-    for index in range(1, 6):
+    for index in range(1, drone_count + 1):
         vehicle_id = f"drone-{index}"
         assignments.append({"partition_id": index, "vehicle_id": vehicle_id})
         vehicles.append(
@@ -129,12 +130,15 @@ def build_kml_product_artifacts(
     lateral_overlap: float = 0.2,
     min_component_area_m2: float = 250.0,
     random_seed: int = 42,
+    drone_count: int = 5,
 ) -> KmlProductArtifacts:
+    if isinstance(drone_count, bool) or not isinstance(drone_count, int) or drone_count < 1:
+        raise ValueError("drone_count must be a positive integer")
     mission = load_kml_mission_input(
         path,
         clearance_m=clearance_m,
         tracking_margin_m=tracking_margin_m,
-        expected_partition_count=5,
+        expected_partition_count=drone_count,
     )
 
     automatic: AutomaticPartitioningResult | None = None
@@ -144,7 +148,7 @@ def build_kml_product_artifacts(
         automatic = create_equal_route_area_partitions(
             mission.boundary_projected,
             mission.route_space_projected,
-            partition_count=5,
+            partition_count=drone_count,
         )
         partition_geometries_wgs84 = {
             index: _to_wgs84_geometry(geometry, mission.planning_crs)
@@ -158,7 +162,7 @@ def build_kml_product_artifacts(
                 "axis_order": ["longitude", "latitude"],
                 "planning": CRS.from_user_input(mission.planning_crs).to_string(),
             },
-            "n_partitions": 5,
+            "n_partitions": drone_count,
             "generation": {"random_seed": random_seed},
         },
         "boundary": [_polygon_record(mission.boundary_wgs84)],
@@ -167,7 +171,7 @@ def build_kml_product_artifacts(
                 "id": partition_id,
                 "geometry": _geometry_records(partition_geometries_wgs84[partition_id]),
             }
-            for partition_id in range(1, 6)
+            for partition_id in range(1, drone_count + 1)
         ],
         "no_go_zones": {
             "predetermined": [
@@ -185,6 +189,7 @@ def build_kml_product_artifacts(
         clearance_m=clearance_m,
         tracking_margin_m=tracking_margin_m,
         min_component_area_m2=min_component_area_m2,
+        drone_count=drone_count,
     )
 
     validated_config = SwarmMissionOperationalConfig.from_dict(config)
@@ -231,7 +236,11 @@ def write_kml_product_artifacts(
         "safe_area_m2": artifacts.mission_input.safe_area_projected.area,
         "route_space_m2": artifacts.mission_input.route_space_projected.area,
         "exclusion_count": artifacts.mission_input.exclusion_count,
-        "partitions_supplied": artifacts.mission_input.supplied_partition_count == 5,
+        "drone_count": int(artifacts.mission_output["metadata"]["n_partitions"]),
+        "partitions_supplied": (
+            artifacts.mission_input.supplied_partition_count
+            == int(artifacts.mission_output["metadata"]["n_partitions"])
+        ),
         "automatic_partition_rotation_degrees": (
             None
             if artifacts.automatic_partitioning is None

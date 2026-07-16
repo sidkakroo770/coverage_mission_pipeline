@@ -364,6 +364,39 @@ def test_tracking_margin_erodes_safe_area_only_for_route_planning():
     assert result.route_space_projected.area < result.safe_area_projected.area
 
 
+def test_partition_inset_creates_18_m_shared_gap_without_adding_to_outer_clearance():
+    result = adapt_swarm_partitions_payload(
+        _payload(),
+        _config(
+            clearance_m=10.0,
+            tracking_margin_m=2.0,
+            partition_inset_m=9.0,
+        ),
+    )
+    left, right = result.definition.components
+    assert left.polygon.bounds == pytest.approx(
+        (12.0, 12.0, 491.0, 988.0),
+        abs=1.0e-4,
+    )
+    assert right.polygon.bounds == pytest.approx(
+        (509.0, 12.0, 988.0, 988.0),
+        abs=1.0e-4,
+    )
+    assert right.polygon.bounds[0] - left.polygon.bounds[2] == pytest.approx(
+        18.0,
+        abs=1.0e-4,
+    )
+    assert result.partition_inset_m == 9.0
+    assert result.route_space_projected.bounds == pytest.approx(
+        (300012.0, 3200012.0, 300988.0, 3200988.0)
+    )
+
+
+def test_negative_partition_inset_is_rejected():
+    with pytest.raises(SwarmPartitionsAdapterError, match="partition_inset_m"):
+        _config(partition_inset_m=-1.0)
+
+
 def test_components_and_connectors_use_route_space_not_authoritative_safe_area():
     result = adapt_swarm_partitions_payload(
         _payload(),
