@@ -53,7 +53,7 @@ from .start_goal_policy import StartGoalPolicyConfig
 from .vehicle_component_ordering import VehicleReference
 
 
-SWARM_PARTITIONS_ADAPTER_ALGORITHM = "swarm_partitions_json_adapter_v2"
+SWARM_PARTITIONS_ADAPTER_ALGORITHM = "swarm_partitions_json_adapter_v3"
 _COORDINATE_CRS = "EPSG:4326"
 _AXIS_ORDER = ("longitude", "latitude")
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -343,6 +343,7 @@ class SwarmPartitionsAdapterConfig:
     vehicles: tuple[SwarmVehicleMissionProfile, ...]
     clearance_m: float = 0.0
     tracking_margin_m: float = 0.0
+    partition_inset_m: float = 0.0
     min_component_area_m2: float = 0.0
     coverage_gap_tolerance_m2: float = 1.0e-4
     coverage_gap_relative_tolerance: float = 1.0e-9
@@ -391,6 +392,7 @@ class SwarmPartitionsAdapterConfig:
         for name in (
             "clearance_m",
             "tracking_margin_m",
+            "partition_inset_m",
             "min_component_area_m2",
             "coverage_gap_tolerance_m2",
             "coverage_gap_relative_tolerance",
@@ -420,6 +422,7 @@ class SwarmPartitionsAdapterResult:
     route_space_projected: BaseGeometry
     route_space_local: BaseGeometry
     tracking_margin_m: float
+    partition_inset_m: float
     component_ids_by_partition_id: Mapping[int, tuple[str, ...]]
     dynamic_exclusion_count: int = 0
     algorithm: str = SWARM_PARTITIONS_ADAPTER_ALGORITHM
@@ -461,6 +464,11 @@ class SwarmPartitionsAdapterResult:
             self,
             "tracking_margin_m",
             _finite_nonnegative(self.tracking_margin_m, "tracking_margin_m"),
+        )
+        object.__setattr__(
+            self,
+            "partition_inset_m",
+            _finite_nonnegative(self.partition_inset_m, "partition_inset_m"),
         )
         if not self.safe_area_projected.buffer(
             _NUMERICAL_GEOMETRY_TOLERANCE_M,
@@ -518,6 +526,7 @@ class SwarmPartitionsAdapterResult:
             "safe_area_m2": float(self.safe_area_projected.area),
             "route_space_m2": float(self.route_space_projected.area),
             "tracking_margin_m": self.tracking_margin_m,
+            "partition_inset_m": self.partition_inset_m,
             "frame": self.frame.to_dict(),
         }
 
@@ -816,21 +825,56 @@ def adapt_swarm_partitions_payload(
     }
     prepared_components: list[PreparedComponent] = []
     component_ids_by_partition: dict[int, tuple[str, ...]] = {}
-    clipped_projected_components: list[Polygon] = []
+    coverage_validation_components: list[Polygon] = []
     local_component_geometries: list[BaseGeometry] = []
 
     for partition_id in sorted(partitions_projected):
+        original_partition = partitions_projected[partition_id]
+
+        # Validate the exporter contract using the original partition geometry.
+        # The deliberate route-centerline inset must not be mistaken for an
+        # uncovered source-partition gap.
+        validation_components = clip_partition_to_safe_area(
+            original_partition,
+            route_space_projected,
+            min_component_area_m2=0.0,
+        )
+        coverage_validation_components.extend(validation_components)
+
+        # Apply the camera-derived inset to the partition before intersecting it
+        # with the global route space. At shared borders, neighbouring partitions
+        # each retreat by this amount. At the outer boundary and exclusions, the
+        # final inset is the stricter of this value and the existing global
+        # clearance/tracking geometry; the values are not added together.
+        planning_partition = original_partition
+        if config.partition_inset_m > 0.0:
+            planning_partition = planning_partition.buffer(
+                -config.partition_inset_m,
+                resolution=16,
+                join_style=2,
+                mitre_limit=5.0,
+            )
+            if planning_partition.is_empty:
+                raise SwarmPartitionsAdapterError(
+                    f"partition {partition_id} is empty after applying "
+                    f"{config.partition_inset_m:.3f} m partition inset"
+                )
+            if not planning_partition.is_valid:
+                raise SwarmPartitionsAdapterError(
+                    f"partition {partition_id} became invalid after partition "
+                    f"inset: {explain_validity(planning_partition)}"
+                )
+
         projected_components = clip_partition_to_safe_area(
-            partitions_projected[partition_id],
+            planning_partition,
             route_space_projected,
             min_component_area_m2=config.min_component_area_m2,
         )
         if not projected_components:
             raise SwarmPartitionsAdapterError(
                 f"partition {partition_id} has no plannable component after "
-                "clearance and tracking margin"
+                "clearance, tracking margin and partition inset"
             )
-        clipped_projected_components.extend(projected_components)
         local_components = [
             _translate_to_local(component, frame)
             for component in projected_components
@@ -878,7 +922,7 @@ def adapt_swarm_partitions_payload(
             "local route space is not covered by the authoritative safe area"
         )
 
-    covered = unary_union(clipped_projected_components)
+    covered = unary_union(coverage_validation_components)
     missing_area = float(route_space_projected.difference(covered).area)
     extra_area = float(covered.difference(route_space_projected).area)
     allowed_gap = max(
@@ -988,6 +1032,7 @@ def adapt_swarm_partitions_payload(
         route_space_projected=route_space_projected,
         route_space_local=route_space_local,
         tracking_margin_m=config.tracking_margin_m,
+        partition_inset_m=config.partition_inset_m,
         component_ids_by_partition_id=component_ids_by_partition,
         dynamic_exclusion_count=dynamic_count,
     )

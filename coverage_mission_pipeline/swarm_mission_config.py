@@ -52,10 +52,17 @@ def _mapping(value: Any, path: str) -> Mapping[str, Any]:
     return value
 
 
-def _strict_keys(value: Mapping[str, Any], required: set[str], path: str) -> None:
+def _strict_keys(
+    value: Mapping[str, Any],
+    required: set[str],
+    path: str,
+    *,
+    optional: set[str] | None = None,
+) -> None:
+    allowed = required | (optional or set())
     actual = set(value.keys())
     missing = sorted(required - actual)
-    unknown = sorted(actual - required)
+    unknown = sorted(actual - allowed)
     if missing:
         raise SwarmMissionConfigError(
             f"{path} is missing required field(s): {', '.join(missing)}"
@@ -174,6 +181,7 @@ def _adapter_from_dict(
             "partition_overlap_tolerance_m2",
         },
         "adapter",
+        optional={"partition_inset_m"},
     )
 
     assignments_raw = _list(assignments_value, "assignments")
@@ -205,6 +213,7 @@ def _adapter_from_dict(
             frame_id=adapter["frame_id"],
             clearance_m=adapter["clearance_m"],
             tracking_margin_m=adapter["tracking_margin_m"],
+            partition_inset_m=adapter.get("partition_inset_m", 0.0),
             min_component_area_m2=adapter["min_component_area_m2"],
             coverage_gap_tolerance_m2=adapter["coverage_gap_tolerance_m2"],
             coverage_gap_relative_tolerance=adapter[
@@ -363,6 +372,7 @@ class SwarmMissionOperationalConfig:
                 "frame_id": self.adapter.frame_id,
                 "clearance_m": self.adapter.clearance_m,
                 "tracking_margin_m": self.adapter.tracking_margin_m,
+                "partition_inset_m": self.adapter.partition_inset_m,
                 "min_component_area_m2": self.adapter.min_component_area_m2,
                 "coverage_gap_tolerance_m2": (
                     self.adapter.coverage_gap_tolerance_m2
